@@ -179,7 +179,8 @@ exports.generateSuggestions = async (req, res) => {
   } catch (error) {
     console.error("Suggestions error:", error);
     const msg = error.message || "Failed to generate suggestions";
-    const status = msg.includes("OPENAI_API_KEY") ? 503 : 500;
+    const status =
+      msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
     res.status(status).json({ message: msg });
   }
 };

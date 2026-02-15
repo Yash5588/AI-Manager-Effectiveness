@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
-import { getManagers, getManagerAnalytics, generateManagerSuggestions } from "../services/api";
+import { getManagers, getManagerAnalytics, generateManagerSuggestions, getEmployeesByManager } from "../services/api";
 import "./ManagerDashboard.css";
 
 ChartJS.register(ArcElement, Tooltip);
 
 const DEFAULT_WEIGHTS = { employee: 0.4, feedback: 0.3, metrics: 0.3 };
-const TABS = ["Overview", "Suggestions", "Manager Details"];
+const TABS = ["Overview", "Suggestions", "Employees", "Manager Details"];
 
 function computeFinalScore(breakdown) {
   if (!breakdown) return 0;
@@ -37,6 +37,8 @@ function ManagerDashboard() {
   const [suggestions, setSuggestions] = useState(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsError, setSuggestionsError] = useState(null);
+  const [employees, setEmployees] = useState([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
 
   const fetchManagers = useCallback(async () => {
     try {
@@ -75,6 +77,23 @@ function ManagerDashboard() {
     setSuggestions(null);
     setSuggestionsError(null);
   }, [selectedManagerId]);
+
+  const fetchEmployees = useCallback(async (managerId) => {
+    if (!managerId) return;
+    setEmployeesLoading(true);
+    try {
+      const res = await getEmployeesByManager(managerId);
+      setEmployees(res.data || []);
+    } catch (err) {
+      setEmployees([]);
+    } finally {
+      setEmployeesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedManagerId) fetchEmployees(selectedManagerId);
+  }, [selectedManagerId, fetchEmployees]);
 
   const handleGenerateSuggestions = async () => {
     if (!selectedManagerId) return;
@@ -252,6 +271,58 @@ function ManagerDashboard() {
                   <div className="suggestions-empty">
                     <span className="empty-icon">💡</span>
                     <p>Click the button above to generate AI-powered suggestions based on this manager&apos;s full analytics data.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "Employees" && (
+              <div className="card employees-card">
+                <h3>Team Members</h3>
+                <p className="employees-desc">
+                  Employees reporting to {analytics?.manager?.name ?? "this manager"}.
+                </p>
+                {employeesLoading ? (
+                  <div className="employees-loading">Loading employees…</div>
+                ) : employees.length === 0 ? (
+                  <div className="employees-empty">
+                    <span className="empty-icon">👥</span>
+                    <p>No employees found for this manager.</p>
+                  </div>
+                ) : (
+                  <div className="employees-list">
+                    {employees.map((emp) => (
+                      <div key={emp._id} className="employee-card">
+                        <div className="employee-avatar">
+                          {emp.name?.charAt(0)?.toUpperCase() ?? "?"}
+                        </div>
+                        <div className="employee-info">
+                          <div className="employee-name">{emp.name}</div>
+                          <dl className="employee-details">
+                            <dt>Role</dt>
+                            <dd>{emp.role}</dd>
+                            <dt>Performance</dt>
+                            <dd>
+                              {emp.performanceRating}/5
+                              <span className={`rating-badge rating-${emp.performanceRating}`}>
+                                {emp.performanceRating >= 4 ? "Strong" : emp.performanceRating >= 3 ? "Good" : "Needs support"}
+                              </span>
+                            </dd>
+                          </dl>
+                          {emp.feedbacks?.length > 0 && (
+                            <div className="employee-feedbacks">
+                              <h5>Feedback given</h5>
+                              {emp.feedbacks.map((fb, i) => (
+                                <div key={i} className="feedback-item">
+                                  <p className="feedback-comment">&quot;{fb.comment}&quot;</p>
+                                  <span className="feedback-sentiment">Sentiment: {Math.round((fb.sentimentScore ?? 0) * 100)}%</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

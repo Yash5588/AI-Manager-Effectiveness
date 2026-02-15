@@ -19,4 +19,8 @@ export const getManagerAnalytics = (managerId) =>
 export const generateManagerSuggestions = (managerId) =>
   api.post(`/manager-analytics/${managerId}/suggestions`);
 
+// Get employees by manager
+export const getEmployeesByManager = (managerId) =>
+  api.get(`/employees/manager/${managerId}`);
+
 export default api;

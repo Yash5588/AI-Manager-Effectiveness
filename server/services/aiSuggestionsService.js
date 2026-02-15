@@ -1,36 +1,86 @@
 const OpenAI = require("openai").default;
 
-/**
- * Explainable AI: Generate dynamic, data-driven improvement suggestions
- * using DeepSeek R1 via OpenRouter.
- */
-async function generateAISuggestions(payload) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENROUTER_API_KEY is not configured");
+/* ───────────────────────────────────────────────
+   1️⃣ Create ONE OpenRouter client (GLOBAL)
+   ─────────────────────────────────────────────── */
+const openRouterClient = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1",
+  defaultHeaders: {
+    "HTTP-Referer": "http://localhost:3000",
+    "X-Title": "AI Manager Effectiveness",
+  },
+});
+
+/* ───────────────────────────────────────────────
+   2️⃣ Rate-limit guard (prevents Cloudflare ban)
+   ─────────────────────────────────────────────── */
+let lastCallTime = 0;
+const MIN_DELAY_MS = 1500;
+
+/* ───────────────────────────────────────────────
+   3️⃣ Safe JSON array parser
+   ─────────────────────────────────────────────── */
+function safeParseJSONArray(text) {
+  try {
+    if (!text) return null;
+
+    const cleaned = text
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+
+    if (start === -1 || end === -1) return null;
+
+    const parsed = JSON.parse(cleaned.slice(start, end + 1));
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
+}
+
+/* ───────────────────────────────────────────────
+   4️⃣ Main AI suggestion generator
+   ─────────────────────────────────────────────── */
+async function generateAISuggestions(payload) {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is missing");
+  }
+
+  // ⏱ Rate limit protection
+  const now = Date.now();
+  if (now - lastCallTime < MIN_DELAY_MS) {
+    throw new Error("AI requests too frequent – throttled");
+  }
+  lastCallTime = now;
 
   const {
     manager,
-    employees,
-    feedbacks,
-    metrics,
-    breakdown,
+    employees = [],
+    feedbacks = [],
+    metrics = [],
+    breakdown = {},
     finalScore,
     category,
-    counts,
   } = payload;
 
-  const employeePct = Math.round(breakdown.avgEmployeeScore * 100);
-  const feedbackPct = Math.round(breakdown.avgFeedbackScore * 100);
-  const metricsPct = Math.round(breakdown.avgMetricScore * 100);
+  if (!manager) {
+    throw new Error("Manager data is required for AI suggestions");
+  }
+
+  const employeePct = Math.round((breakdown.avgEmployeeScore ?? 0.5) * 100);
+  const feedbackPct = Math.round((breakdown.avgFeedbackScore ?? 0.5) * 100);
+  const metricsPct = Math.round((breakdown.avgMetricScore ?? 0.5) * 100);
 
   const employeesSummary =
     employees.length > 0
       ? employees
           .map(
             (e) =>
-              `- ${e.name} (${e.role}): performance rating ${e.performanceRating}/5`
+              `- ${e?.name ?? "N/A"} (${e?.role ?? "N/A"}): rating ${e?.performanceRating ?? "?"}/5`
           )
           .join("\n")
       : "No employees on record.";
@@ -40,75 +90,89 @@ async function generateAISuggestions(payload) {
       ? feedbacks
           .map(
             (f) =>
-              `- From ${f.fromEmployee}: "${f.comment}" (sentiment: ${(
-                f.sentimentScore * 100
-              ).toFixed(0)}%)`
+              `- ${f?.fromEmployee ?? "Anonymous"}: "${f?.comment ?? ""}" (${Math.round(
+                (f?.sentimentScore ?? 0) * 100
+              )}%)`
           )
           .join("\n")
       : "No feedback on record.";
 
   const metricsSummary =
     metrics.length > 0
-      ? metrics.map((m) => `- ${m.metricName}: ${m.value}`).join("\n")
+      ? metrics.map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}`).join("\n")
       : "No metrics on record.";
 
-  const prompt = `You are an expert management coach. Analyze the following COMPLETE manager effectiveness data and generate 4-6 specific, actionable improvement suggestions.
+  const prompt = `
+You are an expert management coach.
 
-## MANAGER PROFILE
-- Name: ${manager.name}
-- Department: ${manager.department}
-- Experience: ${manager.experienceYears} years
+Analyze the manager data below and generate 4–6 actionable improvement suggestions.
 
-## OVERALL PERFORMANCE
-- Effectiveness Score: ${finalScore}/100
-- Category: ${category}
+STRICT RULES:
+- Output ONLY a valid JSON array of strings
+- No markdown
+- No explanations
 
-## SCORE BREAKDOWN
+Manager: ${manager?.name ?? "Unknown"}
+Department: ${manager?.department ?? "Unknown"}
+Experience: ${manager?.experienceYears ?? 0} years
+
+Overall Score: ${finalScore ?? 0}/100 (${category ?? "Unknown"})
+
+Breakdown:
 - Employee Performance: ${employeePct}
 - Feedback Sentiment: ${feedbackPct}
 - Metrics Score: ${metricsPct}
 
-## EMPLOYEES
+Employees:
 ${employeesSummary}
 
-## FEEDBACK
+Feedback:
 ${feedbacksSummary}
 
-## METRICS
+Metrics:
 ${metricsSummary}
+`.trim();
 
-## REQUIREMENTS
-- 1–2 sentences per suggestion
-- Reference real data
-- Explain WHY it matters
-- Prioritize weakest areas
-- Return ONLY a JSON array of strings`;
+  /* ───────────────────────────────────────────────
+     5️⃣ Model fallback logic (IMPORTANT)
+     ─────────────────────────────────────────────── */
+  const models = [
+    "deepseek/deepseek-chat",
+    "deepseek/deepseek-r1",
+    "meta-llama/llama-3.2-3b-instruct:free"
+  ];
 
-  try {
-    const client = new OpenAI({
-      apiKey,
-      baseURL: "https://openrouter.ai/api/v1",
-      defaultHeaders: {
-        "HTTP-Referer": "http://localhost:3000",
-        "X-Title": "AI Manager Effectiveness",
-      },
-    });
+  let lastError = null;
+  for (const model of models) {
+    try {
+      console.log("🧠 AI model:", model);
 
-    const completion = await client.chat.completions.create({
-      model: "deepseek/deepseek-r1", // ✅ FIXED
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.5,
-      max_tokens: 900,
-    });
+      const completion =
+        await openRouterClient.chat.completions.create({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.3,
+          max_tokens: 800,
+        });
 
-    const content = completion.choices[0]?.message?.content?.trim();
-    if (!content) return null;
+      const content = completion?.choices?.[0]?.message?.content;
+      const parsed = safeParseJSONArray(content);
 
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("DeepSeek AI suggestions error:", error);
-    throw error;
+      if (parsed) return parsed;
+    } catch (err) {
+      lastError =
+        err?.response?.data?.error?.message ||
+        err?.error?.message ||
+        err?.message ||
+        String(err);
+      console.warn(`⚠️ Model failed: ${model}`, lastError);
+    }
   }
+
+  const msg = lastError
+    ? `AI failed: ${lastError}`
+    : "AI failed on all models";
+  throw new Error(msg);
 }
 
 module.exports = { generateAISuggestions };
