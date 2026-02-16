@@ -71,7 +71,7 @@ exports.getManagerAnalytics = async (req, res) => {
     const avgEmployeeScore =
       employees.length > 0
         ? employees.reduce((sum, e) => sum + normalizeEmployeeScore(e.performanceRating), 0) /
-          employees.length
+        employees.length
         : 0.5; // default when no data
 
     const avgFeedbackScore =
@@ -82,7 +82,7 @@ exports.getManagerAnalytics = async (req, res) => {
     const avgMetricScore =
       metrics.length > 0
         ? metrics.reduce((sum, m) => sum + normalizeMetricValue(m.value), 0) /
-          metrics.length
+        metrics.length
         : 0.5;
 
     const breakdown = {
@@ -141,7 +141,7 @@ exports.generateSuggestions = async (req, res) => {
     const avgEmployeeScore =
       employees.length > 0
         ? employees.reduce((sum, e) => sum + normalizeEmployeeScore(e.performanceRating), 0) /
-          employees.length
+        employees.length
         : 0.5;
     const avgFeedbackScore =
       feedbacks.length > 0

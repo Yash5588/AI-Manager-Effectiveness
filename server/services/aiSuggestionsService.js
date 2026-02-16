@@ -78,23 +78,23 @@ async function generateAISuggestions(payload) {
   const employeesSummary =
     employees.length > 0
       ? employees
-          .map(
-            (e) =>
-              `- ${e?.name ?? "N/A"} (${e?.role ?? "N/A"}): rating ${e?.performanceRating ?? "?"}/5`
-          )
-          .join("\n")
+        .map(
+          (e) =>
+            `- ${e?.name ?? "N/A"} (${e?.role ?? "N/A"}): rating ${e?.performanceRating ?? "?"}/5`
+        )
+        .join("\n")
       : "No employees on record.";
 
   const feedbacksSummary =
     feedbacks.length > 0
       ? feedbacks
-          .map(
-            (f) =>
-              `- ${f?.fromEmployee ?? "Anonymous"}: "${f?.comment ?? ""}" (${Math.round(
-                (f?.sentimentScore ?? 0) * 100
-              )}%)`
-          )
-          .join("\n")
+        .map(
+          (f) =>
+            `- ${f?.fromEmployee ?? "Anonymous"}: "${f?.comment ?? ""}" (${Math.round(
+              (f?.sentimentScore ?? 0) * 100
+            )}%)`
+        )
+        .join("\n")
       : "No feedback on record.";
 
   const metricsSummary =
@@ -108,7 +108,13 @@ You are an expert management coach.
 Analyze the manager data below and generate 4–6 actionable improvement suggestions.
 
 STRICT RULES:
-- Output ONLY a valid JSON array of strings
+- Output ONLY a valid JSON array of objects.
+- Each object must have the following fields:
+  - "category": one of ["communication", "leadership", "delegation", "growth", "culture"]
+  - "title": string (short title)
+  - "description": string (1-2 sentences)
+  - "priority": one of ["high", "medium", "low"]
+  - "predictedScore": number (the predicted overall effectiveness score out of 100 after the manager implements this suggestion. The current score is ${finalScore ?? 0}. The predicted score must be higher than ${finalScore ?? 0} and at most 100.)
 - No markdown
 - No explanations
 
@@ -221,7 +227,7 @@ async function analyzeSentiment(text) {
       if (!isNaN(score) && score >= 0 && score <= 1) {
         return score;
       }
-    } catch(err) {
+    } catch (err) {
       console.warn(`Sentiment analysis failed on ${model}:`, err.message);
     }
   }
