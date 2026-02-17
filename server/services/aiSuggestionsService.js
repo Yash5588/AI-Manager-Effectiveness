@@ -181,58 +181,5 @@ ${metricsSummary}
   throw new Error(msg);
 }
 
-// -----------------------------------------------
-// 6️⃣ Sentiment Analysis
-// -----------------------------------------------
-async function analyzeSentiment(text) {
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.warn("OPENROUTER_API_KEY missing, returning 0.5");
-    return 0.5; // default to neutral
-  }
+module.exports = { generateAISuggestions };
 
-  // Rate limit protection
-  const now = Date.now();
-  if (now - lastCallTime < MIN_DELAY_MS) {
-    // Basic backoff for sentiment might be needed, or just proceed
-    // For now we share the same throttle
-    await new Promise(r => setTimeout(r, MIN_DELAY_MS - (now - lastCallTime)));
-  }
-  lastCallTime = Date.now();
-
-  const prompt = `
-     Analyze the sentiment of the following feedback text.
-     Respond with ONLY a number between 0 and 1 (inclusive), where 0 is negative, 0.5 is neutral, 1 is positive.
-     No markdown. No extra text.
-
-     Text: "${text}"
-  `.trim();
-
-  const models = [
-    "deepseek/deepseek-chat",
-    "meta-llama/llama-3.2-3b-instruct:free"
-  ];
-
-  for (const model of models) {
-    try {
-      const completion = await openRouterClient.chat.completions.create({
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1, // Low temperature for consistent scoring
-        max_tokens: 10,
-      });
-
-      const content = completion?.choices?.[0]?.message?.content?.trim();
-      const score = parseFloat(content);
-
-      if (!isNaN(score) && score >= 0 && score <= 1) {
-        return score;
-      }
-    } catch (err) {
-      console.warn(`Sentiment analysis failed on ${model}:`, err.message);
-    }
-  }
-
-  return 0.5; // Fallback
-}
-
-module.exports = { generateAISuggestions, analyzeSentiment };
