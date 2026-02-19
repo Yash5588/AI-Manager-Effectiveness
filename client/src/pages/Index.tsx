@@ -1,19 +1,22 @@
 import { useState, useEffect } from "react";
-import { Brain, LayoutDashboard, Users, Lightbulb, Loader2, ChevronDown } from "lucide-react";
+import { Brain, LayoutDashboard, Users, Lightbulb, UserCheck, Loader2, ChevronDown } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OverviewTab from "@/components/tabs/OverviewTab";
 import EmployeesTab from "@/components/tabs/EmployeesTab";
 import SuggestionsTab from "@/components/tabs/SuggestionsTab";
+import EmployeeSuggestionsTab from "@/components/tabs/EmployeeSuggestionsTab";
 import {
   fetchManagers,
   fetchManager,
   fetchEmployees,
   fetchFeedbacks,
   fetchAISuggestions,
+  fetchEmployeeSuggestions,
   type Manager,
   type Employee,
   type Feedback,
   type AISuggestion,
+  type EmployeeSuggestion,
 } from "@/lib/api";
 import {
   DropdownMenu,
@@ -30,6 +33,8 @@ const Index = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const [employeeSuggestions, setEmployeeSuggestions] = useState<EmployeeSuggestion[]>([]);
+  const [empSugLoading, setEmpSugLoading] = useState(false);
 
   // 1. Load list of managers
   useEffect(() => {
@@ -52,6 +57,7 @@ const Index = () => {
 
   const handleManagerChange = async (managerId: string) => {
     setLoading(true);
+    setEmployeeSuggestions([]);
     try {
       const mgr = await fetchManager(managerId);
       setManager(mgr);
@@ -70,6 +76,19 @@ const Index = () => {
     }
   };
 
+  const handleGenerateEmployeeSuggestions = async () => {
+    if (!manager) return;
+    setEmpSugLoading(true);
+    try {
+      const result = await fetchEmployeeSuggestions(manager.id);
+      setEmployeeSuggestions(result.employeeSuggestions);
+    } catch (e) {
+      console.error("Failed to generate employee suggestions:", e);
+    } finally {
+      setEmpSugLoading(false);
+    }
+  };
+
   if (loading && !manager) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -82,6 +101,7 @@ const Index = () => {
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "employees", label: "Employees", icon: Users },
     { id: "suggestions", label: "AI Suggestions", icon: Lightbulb },
+    { id: "employee-suggestions", label: "Employee Coaching", icon: UserCheck },
   ];
 
   return (
@@ -162,6 +182,14 @@ const Index = () => {
             </TabsContent>
             <TabsContent value="suggestions">
               <SuggestionsTab suggestions={suggestions} currentScore={manager.effectivenessScore} />
+            </TabsContent>
+            <TabsContent value="employee-suggestions">
+              <EmployeeSuggestionsTab
+                employeeSuggestions={employeeSuggestions}
+                currentScore={manager.effectivenessScore}
+                loading={empSugLoading}
+                onGenerate={handleGenerateEmployeeSuggestions}
+              />
             </TabsContent>
           </Tabs>
         ) : (

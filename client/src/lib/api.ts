@@ -59,6 +59,21 @@ export interface AISuggestion {
   predictedScore: number; // predicted effectiveness score after implementing this suggestion
 }
 
+export interface EmployeeSuggestionItem {
+  title: string;
+  description: string;
+  focus: "performance" | "communication" | "collaboration" | "skills" | "initiative";
+}
+
+export interface EmployeeSuggestion {
+  employeeName: string;
+  employeeRole: string;
+  currentRating: number;
+  suggestions: EmployeeSuggestionItem[];
+  predictedManagerScore: number;
+  rationale: string;
+}
+
 // Helper to derive label from score
 function getSentimentLabel(score: number): "Positive" | "Neutral" | "Negative" {
   if (score >= 0.6) return "Positive";
@@ -149,6 +164,16 @@ export async function fetchAISuggestions(managerId: string): Promise<AISuggestio
     ...s,
     predictedScore: s.predictedScore ?? s.expectedImpact ?? 0,
   }));
+}
+
+export async function fetchEmployeeSuggestions(
+  managerId: string
+): Promise<{ employeeSuggestions: EmployeeSuggestion[]; currentScore: number }> {
+  const res = await api.post(`/manager-analytics/${managerId}/employee-suggestions`);
+  return {
+    employeeSuggestions: res.data.employeeSuggestions || [],
+    currentScore: res.data.currentScore || 0,
+  };
 }
 
 export default api;

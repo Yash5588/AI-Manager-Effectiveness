@@ -136,7 +136,6 @@ flowchart LR
   AISvc -->|suggestions array| Ctrl
   Ctrl -->|JSON response| API
 ```
-
 ---
 
 ## File reference

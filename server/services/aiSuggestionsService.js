@@ -114,7 +114,8 @@ STRICT RULES:
   - "title": string (short title)
   - "description": string (1-2 sentences)
   - "priority": one of ["high", "medium", "low"]
-  - "predictedScore": number (the predicted overall effectiveness score out of 100 after the manager implements this suggestion. The current score is ${finalScore ?? 0}. The predicted score must be higher than ${finalScore ?? 0} and at most 100.)
+  - "predictedScore": number (This is the NEW overall effectiveness score out of 100 AFTER implementing the suggestion. The current score is ${finalScore ?? 0}. The predictedScore MUST BE strictly GREATER THAN ${finalScore ?? 0}. For example, if the current score is 72, the predictedScore should be between 73 and 100.)
+- Each suggestion MUST show improvement.
 - No markdown
 - No explanations
 
@@ -164,7 +165,24 @@ ${metricsSummary}
       const content = completion?.choices?.[0]?.message?.content;
       const parsed = safeParseJSONArray(content);
 
-      if (parsed) return parsed;
+      if (parsed) {
+        // 🛡️ Post-processing: Ensure strictly increasing scores
+        return parsed.map((s) => {
+          const current = finalScore ?? 0;
+          let predicted = Number(s.predictedScore);
+
+          // If AI hallucinated a lower score or invalid number, fix it
+          if (isNaN(predicted) || predicted <= current) {
+            // Add a realistic boost if the AI failed to provide a valid one
+            predicted = Math.min(100, current + Math.floor(Math.random() * 8) + 4);
+          }
+
+          return {
+            ...s,
+            predictedScore: predicted,
+          };
+        });
+      }
     } catch (err) {
       lastError =
         err?.response?.data?.error?.message ||
@@ -181,5 +199,170 @@ ${metricsSummary}
   throw new Error(msg);
 }
 
-module.exports = { generateAISuggestions };
+/* ───────────────────────────────────────────────
+   6️⃣ Per-Employee Suggestion Generator
+   ─────────────────────────────────────────────── */
+async function generateEmployeeSuggestions(payload) {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is missing");
+  }
 
+  // ⏱ Rate limit protection
+  const now = Date.now();
+  if (now - lastCallTime < MIN_DELAY_MS) {
+    await new Promise((r) => setTimeout(r, MIN_DELAY_MS - (now - lastCallTime)));
+  }
+  lastCallTime = Date.now();
+
+  const {
+    manager,
+    employees = [],
+    feedbacks = [],
+    metrics = [],
+    breakdown = {},
+    finalScore,
+    category,
+  } = payload;
+
+  if (!manager) {
+    throw new Error("Manager data is required for employee suggestions");
+  }
+
+  const employeePct = Math.round((breakdown.avgEmployeeScore ?? 0.5) * 100);
+  const feedbackPct = Math.round((breakdown.avgFeedbackScore ?? 0.5) * 100);
+  const metricsPct = Math.round((breakdown.avgMetricScore ?? 0.5) * 100);
+
+  const metricsSummary =
+    metrics.length > 0
+      ? metrics.map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}`).join("\n")
+      : "No metrics on record.";
+
+  // Build per-employee detail blocks
+  const employeeDetails = employees
+    .map((emp) => {
+      const empFeedbacks = feedbacks.filter(
+        (f) => f.fromEmployee === emp.name
+      );
+      const feedbackText =
+        empFeedbacks.length > 0
+          ? empFeedbacks
+            .map(
+              (f) =>
+                `    - "${f?.comment ?? ""}" (sentiment: ${Math.round(
+                  (f?.sentimentScore ?? 0) * 100
+                )}%)`
+            )
+            .join("\n")
+          : "    - No feedback given.";
+
+      return `  Employee: ${emp?.name ?? "N/A"}
+  Role: ${emp?.role ?? "N/A"}
+  Performance Rating: ${emp?.performanceRating ?? "?"}/5
+  Their Feedback about the manager:
+${feedbackText}`;
+    })
+    .join("\n\n");
+
+  const prompt = `
+You are an expert management coach.
+
+A manager wants to give personalized improvement suggestions to each of their employees. 
+For EACH employee listed below, generate 2-3 actionable suggestions the manager should give that employee to help improve the MANAGER'S overall effectiveness score.
+
+The suggestions should account for:
+- The employee's current performance rating
+- The feedback they gave about the manager (to address any concerns)
+- The team's overall metrics
+- What actions by this employee would help improve the manager's effectiveness
+
+Also predict what the manager's NEW overall effectiveness score (out of 100) would be if that employee follows all the suggestions. The current manager effectiveness score is ${finalScore ?? 0}/100.
+
+STRICT RULES:
+- Output ONLY a valid JSON array of objects.
+- Each object represents ONE employee and must have:
+  - "employeeName": string (employee's name)
+  - "employeeRole": string (employee's role)
+  - "currentRating": number (their current performance rating out of 5)
+  - "suggestions": array of objects, each with:
+    - "title": string (short actionable title)
+    - "description": string (1-2 sentences explaining what the employee should do)
+    - "focus": one of ["performance", "communication", "collaboration", "skills", "initiative"]
+  - "predictedManagerScore": number (predicted manager effectiveness score out of 100 AFTER this employee follows all suggestions. MUST be strictly GREATER than ${finalScore ?? 0} and at most 100)
+  - "rationale": string (1 sentence explaining why these suggestions would boost the manager's score)
+- No markdown, no explanations, ONLY the JSON array.
+
+Manager: ${manager?.name ?? "Unknown"}
+Department: ${manager?.department ?? "Unknown"}
+Experience: ${manager?.experienceYears ?? 0} years
+Current Score: ${finalScore ?? 0}/100 (${category ?? "Unknown"})
+
+Score Breakdown:
+- Employee Performance: ${employeePct}%
+- Feedback Sentiment: ${feedbackPct}%
+- Metrics Score: ${metricsPct}%
+
+Team Metrics:
+${metricsSummary}
+
+Employee Details:
+${employeeDetails}
+`.trim();
+
+  /* ─── Model fallback logic ──── */
+  const models = [
+    "deepseek/deepseek-chat",
+    "deepseek/deepseek-r1",
+    "meta-llama/llama-3.2-3b-instruct:free",
+  ];
+
+  let lastError = null;
+  for (const model of models) {
+    try {
+      console.log("🧠 Employee suggestions AI model:", model);
+
+      const completion = await openRouterClient.chat.completions.create({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+        max_tokens: 1500,
+      });
+
+      const content = completion?.choices?.[0]?.message?.content;
+      const parsed = safeParseJSONArray(content);
+
+      if (parsed) {
+        // 🛡️ Post-processing: ensure valid predicted scores
+        return parsed.map((emp) => {
+          const current = finalScore ?? 0;
+          let predicted = Number(emp.predictedManagerScore);
+
+          if (isNaN(predicted) || predicted <= current) {
+            predicted = Math.min(
+              100,
+              current + Math.floor(Math.random() * 6) + 3
+            );
+          }
+
+          return {
+            ...emp,
+            predictedManagerScore: predicted,
+          };
+        });
+      }
+    } catch (err) {
+      lastError =
+        err?.response?.data?.error?.message ||
+        err?.error?.message ||
+        err?.message ||
+        String(err);
+      console.warn(`⚠️ Model failed: ${model}`, lastError);
+    }
+  }
+
+  const msg = lastError
+    ? `AI failed: ${lastError}`
+    : "AI failed on all models";
+  throw new Error(msg);
+}
+
+module.exports = { generateAISuggestions, generateEmployeeSuggestions };

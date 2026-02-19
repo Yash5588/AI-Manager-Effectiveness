@@ -2,7 +2,7 @@ const Manager = require("../models/Manager");
 const Employee = require("../models/Employee");
 const Feedback = require("../models/Feedback");
 const PerformanceMetric = require("../models/PerformanceMetric");
-const { generateAISuggestions } = require("../services/aiSuggestionsService");
+const { generateAISuggestions, generateEmployeeSuggestions } = require("../services/aiSuggestionsService");
 
 /**
  * Normalize employee performanceRating from 1-5 scale to 0-1
@@ -179,6 +179,73 @@ exports.generateSuggestions = async (req, res) => {
   } catch (error) {
     console.error("Suggestions error:", error);
     const msg = error.message || "Failed to generate suggestions";
+    const status =
+      msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
+    res.status(status).json({ message: msg });
+  }
+};
+
+/**
+ * POST /api/manager-analytics/:managerId/employee-suggestions
+ * Fetches all data, sends to AI to generate per-employee suggestions
+ * that would improve the manager's effectiveness score.
+ */
+exports.generateEmployeeSuggestionsHandler = async (req, res) => {
+  try {
+    const { managerId } = req.params;
+
+    const manager = await Manager.findById(managerId);
+    if (!manager) {
+      return res.status(404).json({ message: "Manager not found" });
+    }
+
+    const [employees, feedbacks, metrics] = await Promise.all([
+      Employee.find({ managerId }),
+      Feedback.find({ managerId }),
+      PerformanceMetric.find({ managerId }),
+    ]);
+
+    const avgEmployeeScore =
+      employees.length > 0
+        ? employees.reduce((sum, e) => sum + normalizeEmployeeScore(e.performanceRating), 0) /
+        employees.length
+        : 0.5;
+    const avgFeedbackScore =
+      feedbacks.length > 0
+        ? feedbacks.reduce((sum, f) => sum + f.sentimentScore, 0) / feedbacks.length
+        : 0.5;
+    const avgMetricScore =
+      metrics.length > 0
+        ? metrics.reduce((sum, m) => sum + normalizeMetricValue(m.value), 0) / metrics.length
+        : 0.5;
+
+    const breakdown = {
+      avgEmployeeScore: Math.round(avgEmployeeScore * 100) / 100,
+      avgFeedbackScore: Math.round(avgFeedbackScore * 100) / 100,
+      avgMetricScore: Math.round(avgMetricScore * 100) / 100,
+    };
+
+    const weights = { employee: 0.4, feedback: 0.3, metrics: 0.3 };
+    const finalScore = computeFinalScore(breakdown, weights);
+    const category = getPerformanceCategory(finalScore);
+    const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
+
+    const payload = {
+      manager: manager.toObject ? manager.toObject() : manager,
+      employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
+      feedbacks: feedbacks.map((f) => (f.toObject ? f.toObject() : f)),
+      metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
+      breakdown,
+      finalScore,
+      category,
+      counts,
+    };
+
+    const employeeSuggestions = await generateEmployeeSuggestions(payload);
+    res.json({ employeeSuggestions, currentScore: finalScore });
+  } catch (error) {
+    console.error("Employee suggestions error:", error);
+    const msg = error.message || "Failed to generate employee suggestions";
     const status =
       msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
     res.status(status).json({ message: msg });
