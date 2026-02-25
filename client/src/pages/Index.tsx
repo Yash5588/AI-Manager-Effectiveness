@@ -132,8 +132,13 @@ const Index = () => {
       <header className="border-b border-border bg-card/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-auto flex items-center justify-center">
-              <img src="/darwinbox-logo.png" alt="Darwinbox" className="h-8 w-auto object-contain" />
+            <div className="h-24 w-auto flex items-center justify-center">
+              <img
+                src="/darwinbox-logo-clean.png"
+                alt="Darwinbox"
+                className="h-24 w-auto object-contain"
+                style={{ mixBlendMode: 'multiply' }}
+              />
             </div>
             <div>
               <h1 className="font-display text-lg font-bold text-foreground leading-none">

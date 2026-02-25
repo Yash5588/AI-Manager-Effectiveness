@@ -80,14 +80,29 @@ export interface Manager {
 
 export interface Feedback {
   _id: string;
-  id: string; // compatibility
+  id: string;
   employeeId?: string;
-  employeeName: string; // 'fromEmployee' in backend
+  employeeName: string;
   managerId: string;
-  text: string; // 'comment' in backend
+  text: string;
   sentimentScore: number;
-  sentimentLabel: "Positive" | "Neutral" | "Negative"; // derived
-  date: string; // createdAt
+  sentimentLabel: "Positive" | "Neutral" | "Negative";
+  date: string;
+  compositeFeedbackScore?: number;
+  ratings?: {
+    communication?: number;
+    recognition?: number;
+    availability?: number;
+    careerGrowth?: number;
+    empowerment?: number;
+    fairness?: number;
+    decisionMaking?: number;
+    conflictResolution?: number;
+  };
+  npsScore?: number;
+  pulseMood?: string;
+  feedbackType?: string;
+  feedbackCategory?: string;
 }
 
 export interface AISuggestion {
@@ -214,9 +229,14 @@ export async function fetchEmployees(managerId: string): Promise<Employee[]> {
   }));
 }
 
-export async function fetchFeedbacks(managerId: string): Promise<Feedback[]> {
-  const res = await api.get(`/feedback/manager/${managerId}`);
-  return res.data.map((f: any) => ({
+export async function fetchFeedbacks(managerId: string, page: number = 1, limit: number = 50): Promise<Feedback[]> {
+  const res = await api.get(`/feedback/manager/${managerId}?page=${page}&limit=${limit}`);
+  const data = res.data;
+  const feedbackList = data.feedbacks ?? data;
+
+  if (!Array.isArray(feedbackList)) return [];
+
+  return feedbackList.map((f: any) => ({
     _id: f._id,
     id: f._id,
     employeeName: f.fromEmployee,
@@ -225,7 +245,13 @@ export async function fetchFeedbacks(managerId: string): Promise<Feedback[]> {
     sentimentScore: f.sentimentScore,
     sentimentLabel: getSentimentLabel(f.sentimentScore),
     date: f.createdAt,
-    employeeId: f.employeeId || "unknown"
+    employeeId: f.employeeId || "unknown",
+    compositeFeedbackScore: f.compositeFeedbackScore,
+    ratings: f.ratings,
+    npsScore: f.npsScore,
+    pulseMood: f.pulseMood,
+    feedbackType: f.feedbackType,
+    feedbackCategory: f.feedbackCategory
   }));
 }
 

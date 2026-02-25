@@ -24,10 +24,22 @@ function getPerformanceCategory(score) {
     return "Needs Improvement";
 }
 
+// ── Feedback query limits (same as analytics controller) ──
+const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
+const FEEDBACK_SCORE_LIMIT = 50;
+
+function getFeedbackDateFilter() {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - FEEDBACK_WINDOW_DAYS);
+    return { createdAt: { $gte: cutoff } };
+}
+
 async function computeManagerAnalytics(managerId) {
     const [employees, feedbacks, metrics, latestSnapshot, extendedMetrics] = await Promise.all([
         Employee.find({ managerId }),
-        Feedback.find({ managerId }),
+        Feedback.find({ managerId, ...getFeedbackDateFilter() })
+            .sort({ createdAt: -1 })
+            .limit(FEEDBACK_SCORE_LIMIT),
         PerformanceMetric.find({ managerId }),
         ScoreSnapshot.findOne({ managerId, aiScore: { $exists: true } }).sort({ createdAt: -1 }),
         ManagerExtendedMetrics.findOne({ managerId }),
@@ -39,7 +51,7 @@ async function computeManagerAnalytics(managerId) {
             : 0.5;
     const avgFeedbackScore =
         feedbacks.length > 0
-            ? feedbacks.reduce((s, f) => s + f.sentimentScore, 0) / feedbacks.length
+            ? feedbacks.reduce((s, f) => s + (f.compositeFeedbackScore ?? f.sentimentScore ?? 0.5), 0) / feedbacks.length
             : 0.5;
     const avgMetricScore =
         metrics.length > 0

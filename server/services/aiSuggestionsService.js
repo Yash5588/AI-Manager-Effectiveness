@@ -90,12 +90,22 @@ async function generateAISuggestions(payload) {
   const feedbacksSummary =
     feedbacks.length > 0
       ? feedbacks
-        .map(
-          (f) =>
-            `- "Anonymous Feedback": "${f?.comment ?? ""}" (${Math.round(
-              (f?.sentimentScore ?? 0) * 100
-            )}%)`
-        )
+        .map((f) => {
+          let line = `- "Anonymous Feedback": "${f?.comment ?? ""}" (sentiment: ${Math.round(
+            (f?.sentimentScore ?? 0) * 100
+          )}%, composite: ${Math.round((f?.compositeFeedbackScore ?? f?.sentimentScore ?? 0) * 100)}%)`;
+          if (f?.ratings) {
+            const rKeys = Object.entries(f.ratings).filter(([, v]) => v != null);
+            if (rKeys.length > 0) {
+              line += ` [Ratings: ${rKeys.map(([k, v]) => `${k}=${v}/5`).join(", ")}]`;
+            }
+          }
+          if (f?.npsScore != null) line += ` [NPS: ${f.npsScore}/10]`;
+          if (f?.pulseMood) line += ` [Mood: ${f.pulseMood}]`;
+          if (f?.feedbackCategory) line += ` [Category: ${f.feedbackCategory}]`;
+          if (f?.feedbackType) line += ` [Type: ${f.feedbackType}]`;
+          return line;
+        })
         .join("\n")
       : "No feedback on record.";
 

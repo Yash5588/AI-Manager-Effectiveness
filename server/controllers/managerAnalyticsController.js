@@ -7,6 +7,17 @@ const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { generateAISuggestions, generateEmployeeSuggestions } = require("../services/aiSuggestionsService");
 const { computeAIScore } = require("../services/aiScoringService");
 
+// ── Feedback query limits ──
+const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
+const FEEDBACK_SCORE_LIMIT = 50;  // max feedbacks used for score computation
+const FEEDBACK_AI_LIMIT = 20;     // max feedbacks sent to AI prompts
+
+function getFeedbackDateFilter() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - FEEDBACK_WINDOW_DAYS);
+  return { createdAt: { $gte: cutoff } };
+}
+
 /**
  * Normalize employee performanceRating from 1-5 scale to 0-1
  */
@@ -63,10 +74,12 @@ exports.getManagerAnalytics = async (req, res) => {
       return res.status(404).json({ message: "Manager not found" });
     }
 
-    // 2. Fetch related data
+    // 2. Fetch related data (feedbacks limited to rolling window + cap)
     const [employees, feedbacks, metrics] = await Promise.all([
       Employee.find({ managerId }),
-      Feedback.find({ managerId }),
+      Feedback.find({ managerId, ...getFeedbackDateFilter() })
+        .sort({ createdAt: -1 })
+        .limit(FEEDBACK_SCORE_LIMIT),
       PerformanceMetric.find({ managerId }),
     ]);
 
@@ -79,7 +92,7 @@ exports.getManagerAnalytics = async (req, res) => {
 
     const avgFeedbackScore =
       feedbacks.length > 0
-        ? feedbacks.reduce((sum, f) => sum + f.sentimentScore, 0) / feedbacks.length
+        ? feedbacks.reduce((sum, f) => sum + (f.compositeFeedbackScore ?? f.sentimentScore ?? 0.5), 0) / feedbacks.length
         : 0.5;
 
     const avgMetricScore =
@@ -127,7 +140,7 @@ exports.getManagerAnalytics = async (req, res) => {
       aiResult = await computeAIScore({
         manager: manager.toObject ? manager.toObject() : manager,
         employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
-        feedbacks: feedbacks.map((f) => (f.toObject ? f.toObject() : f)),
+        feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map((f) => (f.toObject ? f.toObject() : f)),
         metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
         extendedMetrics,
         breakdown,
@@ -211,7 +224,9 @@ exports.generateSuggestions = async (req, res) => {
 
     const [employees, feedbacks, metrics] = await Promise.all([
       Employee.find({ managerId }),
-      Feedback.find({ managerId }),
+      Feedback.find({ managerId, ...getFeedbackDateFilter() })
+        .sort({ createdAt: -1 })
+        .limit(FEEDBACK_SCORE_LIMIT),
       PerformanceMetric.find({ managerId }),
     ]);
 
@@ -222,7 +237,7 @@ exports.generateSuggestions = async (req, res) => {
         : 0.5;
     const avgFeedbackScore =
       feedbacks.length > 0
-        ? feedbacks.reduce((sum, f) => sum + f.sentimentScore, 0) / feedbacks.length
+        ? feedbacks.reduce((sum, f) => sum + (f.compositeFeedbackScore ?? f.sentimentScore ?? 0.5), 0) / feedbacks.length
         : 0.5;
     const avgMetricScore =
       metrics.length > 0
@@ -243,7 +258,7 @@ exports.generateSuggestions = async (req, res) => {
     const payload = {
       manager: manager.toObject ? manager.toObject() : manager,
       employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
-      feedbacks: feedbacks.map((f) => (f.toObject ? f.toObject() : f)),
+      feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map((f) => (f.toObject ? f.toObject() : f)),
       metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
       breakdown,
       finalScore,
@@ -278,7 +293,9 @@ exports.generateEmployeeSuggestionsHandler = async (req, res) => {
 
     const [employees, feedbacks, metrics] = await Promise.all([
       Employee.find({ managerId }),
-      Feedback.find({ managerId }),
+      Feedback.find({ managerId, ...getFeedbackDateFilter() })
+        .sort({ createdAt: -1 })
+        .limit(FEEDBACK_SCORE_LIMIT),
       PerformanceMetric.find({ managerId }),
     ]);
 
@@ -289,7 +306,7 @@ exports.generateEmployeeSuggestionsHandler = async (req, res) => {
         : 0.5;
     const avgFeedbackScore =
       feedbacks.length > 0
-        ? feedbacks.reduce((sum, f) => sum + f.sentimentScore, 0) / feedbacks.length
+        ? feedbacks.reduce((sum, f) => sum + (f.compositeFeedbackScore ?? f.sentimentScore ?? 0.5), 0) / feedbacks.length
         : 0.5;
     const avgMetricScore =
       metrics.length > 0
@@ -310,7 +327,7 @@ exports.generateEmployeeSuggestionsHandler = async (req, res) => {
     const payload = {
       manager: manager.toObject ? manager.toObject() : manager,
       employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
-      feedbacks: feedbacks.map((f) => (f.toObject ? f.toObject() : f)),
+      feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map((f) => (f.toObject ? f.toObject() : f)),
       metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
       breakdown,
       finalScore,
@@ -370,7 +387,9 @@ exports.getAIScore = async (req, res) => {
 
     const [employees, feedbacks, metrics, extendedMetrics] = await Promise.all([
       Employee.find({ managerId }),
-      Feedback.find({ managerId }),
+      Feedback.find({ managerId, ...getFeedbackDateFilter() })
+        .sort({ createdAt: -1 })
+        .limit(FEEDBACK_SCORE_LIMIT),
       PerformanceMetric.find({ managerId }),
       ManagerExtendedMetrics.findOne({ managerId }),
     ]);
@@ -383,7 +402,7 @@ exports.getAIScore = async (req, res) => {
         : 0.5;
     const avgFeedbackScore =
       feedbacks.length > 0
-        ? feedbacks.reduce((sum, f) => sum + f.sentimentScore, 0) / feedbacks.length
+        ? feedbacks.reduce((sum, f) => sum + (f.compositeFeedbackScore ?? f.sentimentScore ?? 0.5), 0) / feedbacks.length
         : 0.5;
     const avgMetricScore =
       metrics.length > 0
@@ -399,11 +418,11 @@ exports.getAIScore = async (req, res) => {
     const weights = { employee: 0.4, feedback: 0.3, metrics: 0.3 };
     const formulaScore = computeFinalScore(breakdown, weights);
 
-    // 3. Call AI scoring service
+    // 3. Call AI scoring service (limit feedbacks sent to AI)
     const aiResult = await computeAIScore({
       manager: manager.toObject ? manager.toObject() : manager,
       employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
-      feedbacks: feedbacks.map((f) => (f.toObject ? f.toObject() : f)),
+      feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map((f) => (f.toObject ? f.toObject() : f)),
       metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
       extendedMetrics: extendedMetrics ? (extendedMetrics.toObject ? extendedMetrics.toObject() : extendedMetrics) : {},
       breakdown,

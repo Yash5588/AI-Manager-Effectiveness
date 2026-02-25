@@ -190,8 +190,13 @@ const HRDashboard = () => {
             <header className="border-b border-border bg-card/60 backdrop-blur-sm sticky top-0 z-10">
                 <div className="container mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="h-8 w-auto flex items-center justify-center">
-                            <img src="/darwinbox-logo.png" alt="Darwinbox" className="h-8 w-auto object-contain" />
+                        <div className="h-24 w-auto flex items-center justify-center">
+                            <img
+                                src="/darwinbox-logo-clean.png"
+                                alt="Darwinbox"
+                                className="h-24 w-auto object-contain"
+                                style={{ mixBlendMode: 'multiply' }}
+                            />
                         </div>
                         <div>
                             <h1 className="font-display text-lg font-bold text-foreground leading-none">
@@ -440,10 +445,29 @@ const HRDashboard = () => {
                                                 selectedFeedbacks.map((fb) => (
                                                     <div key={fb._id} className="p-3 rounded-lg bg-secondary/30 border border-border/50">
                                                         <div className="flex items-center justify-between mb-1.5">
-                                                            <span className="text-[10px] font-bold text-muted-foreground">{fb.employeeName}</span>
-                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${fb.sentimentScore >= 0.6 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : fb.sentimentScore <= 0.4 ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"}`}>
-                                                                {getSentimentLabel(fb.sentimentScore)}
-                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-bold text-muted-foreground">{fb.employeeName}</span>
+                                                                {fb.pulseMood && (
+                                                                    <span className="text-xs">
+                                                                        {fb.pulseMood === "thriving" ? "🔥" : fb.pulseMood === "happy" ? "😊" : fb.pulseMood === "neutral" ? "😐" : fb.pulseMood === "stressed" ? "😓" : "😞"}
+                                                                    </span>
+                                                                )}
+                                                                {fb.feedbackCategory && (
+                                                                    <span className="text-[9px] font-semibold text-muted-foreground uppercase opacity-70">
+                                                                        {fb.feedbackCategory}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {fb.compositeFeedbackScore != null && (
+                                                                    <span className="text-[9px] font-bold text-primary/80">
+                                                                        {Math.round(fb.compositeFeedbackScore * 100)}%
+                                                                    </span>
+                                                                )}
+                                                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${fb.sentimentScore >= 0.6 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : fb.sentimentScore <= 0.4 ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"}`}>
+                                                                    {getSentimentLabel(fb.sentimentScore)}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         <p className="text-xs text-muted-foreground italic leading-relaxed">"{fb.text}"</p>
                                                     </div>

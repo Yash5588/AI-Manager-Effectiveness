@@ -91,12 +91,25 @@ async function computeAIScore(payload) {
     const feedbacksSummary =
         feedbacks.length > 0
             ? feedbacks
-                .map(
-                    (f) =>
-                        `- "${f?.fromEmployee ?? "Anonymous"}": "${f?.comment ?? ""}" (sentiment: ${Math.round(
-                            (f?.sentimentScore ?? 0) * 100
-                        )}%)`
-                )
+                .map((f) => {
+                    let line = `- "${f?.fromEmployee ?? "Anonymous"}": "${f?.comment ?? ""}" (sentiment: ${Math.round(
+                        (f?.sentimentScore ?? 0) * 100
+                    )}%, composite: ${Math.round((f?.compositeFeedbackScore ?? f?.sentimentScore ?? 0) * 100)}%)`;
+                    if (f?.ratings) {
+                        const rKeys = Object.entries(f.ratings).filter(([, v]) => v != null);
+                        if (rKeys.length > 0) {
+                            line += ` [Ratings: ${rKeys.map(([k, v]) => `${k}=${v}/5`).join(", ")}]`;
+                        }
+                    }
+                    if (f?.npsScore != null) line += ` [NPS: ${f.npsScore}/10]`;
+                    if (f?.pulseMood) line += ` [Mood: ${f.pulseMood}]`;
+                    if (f?.peerComparison) line += ` [vs Peers: ${f.peerComparison}]`;
+                    if (f?.oneOnOneFrequency) line += ` [1:1s: ${f.oneOnOneFrequency}]`;
+                    if (f?.feedbackCategory) line += ` [Category: ${f.feedbackCategory}]`;
+                    if (f?.feedbackType) line += ` [Type: ${f.feedbackType}]`;
+                    if (f?.urgency) line += ` [Urgency: ${f.urgency}]`;
+                    return line;
+                })
                 .join("\n")
             : "No feedback on record.";
 

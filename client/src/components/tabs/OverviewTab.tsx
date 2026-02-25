@@ -255,23 +255,45 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
         </div>
         <div className="space-y-3">
           {feedbacks.slice(0, 8).map((fb) => (
-            <div key={fb.id} className="group flex items-center justify-between gap-4 p-3.5 rounded-xl bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border/50 transition-all">
-              <div className="flex items-center gap-4 flex-1 min-w-0">
-                <span className={`shrink-0 text-[10px] font-bold uppercase tracking-tight px-2 py-1 rounded bg-secondary/50 border border-border/50 ${fb.sentimentLabel === "Positive" ? "text-success"
-                  : fb.sentimentLabel === "Negative" ? "text-destructive"
-                    : "text-accent"
-                  }`}>
-                  {fb.sentimentLabel}
-                </span>
-                <p className="text-sm text-foreground/90 font-medium truncate">
-                  {fb.text}
-                </p>
+            <div key={fb.id} className="group flex flex-col gap-2 p-3.5 rounded-xl bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border/50 transition-all">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold uppercase tracking-tight px-2 py-0.5 rounded border border-border/50 ${fb.sentimentLabel === "Positive" ? "text-success"
+                    : fb.sentimentLabel === "Negative" ? "text-destructive"
+                      : "text-accent"
+                    }`}>
+                    {fb.sentimentLabel}
+                  </span>
+                  {fb.feedbackCategory && (
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase opacity-70">
+                      {fb.feedbackCategory}
+                    </span>
+                  )}
+                  {fb.pulseMood && (
+                    <span className="text-xs">
+                      {fb.pulseMood === "thriving" ? "🔥" : fb.pulseMood === "happy" ? "😊" : fb.pulseMood === "neutral" ? "😐" : fb.pulseMood === "stressed" ? "😓" : "😞"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {fb.compositeFeedbackScore != null && (
+                    <span className="text-[10px] font-bold text-primary/80">
+                      Score: {Math.round(fb.compositeFeedbackScore * 100)}%
+                    </span>
+                  )}
+                  <time className="text-[10px] tabular-nums font-medium text-muted-foreground/50">
+                    {new Date(fb.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </time>
+                </div>
               </div>
-              <time className="text-[10px] tabular-nums font-medium text-muted-foreground/50">
-                {new Date(fb.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              </time>
+              <p className="text-sm text-foreground/90 font-medium line-clamp-2 italic">
+                "{fb.text}"
+              </p>
             </div>
           ))}
+          {feedbacks.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8 italic">No feedback received yet.</p>
+          )}
         </div>
       </motion.div>
 

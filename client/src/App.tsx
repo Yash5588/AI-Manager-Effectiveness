@@ -54,10 +54,7 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />Step 4 — Update Auth Routes to support HR login
-
-Editing
-
+      <Toaster />
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
