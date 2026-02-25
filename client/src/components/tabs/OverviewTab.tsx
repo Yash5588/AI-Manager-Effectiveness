@@ -8,7 +8,6 @@ import type { Manager, Feedback, Metric } from "@/lib/api";
 interface OverviewTabProps {
   manager: Manager;
   feedbacks: Feedback[];
-  metrics: Metric[];
 }
 
 const breakdownLabels: Record<string, string> = {
@@ -26,6 +25,18 @@ const breakdownLabels: Record<string, string> = {
   trainingDevelopment: "Training & Dev",
 };
 
+const extendedMetricLabels: Record<string, string> = {
+  teamRetentionRate: "Team Retention Rate",
+  goalCompletionRate: "Goal Completion Rate",
+  oneOnOneFrequency: "1-on-1 Meeting Frequency",
+  employeeGrowthRate: "Employee Growth Rate",
+  responseTimeScore: "Response Time Score",
+  peerReviewScore: "360° Peer Review Score",
+  projectDeliveryTimeliness: "Project Delivery Timeliness",
+  employeeEngagementScore: "Employee Engagement Score",
+  trainingInvestment: "Training & Dev Investment",
+};
+
 function getBarColor(value: number): string {
   if (value >= 80) return "bg-emerald-500";
   if (value >= 60) return "bg-blue-500";
@@ -33,7 +44,7 @@ function getBarColor(value: number): string {
   return "bg-red-500";
 }
 
-const OverviewTab = ({ manager, feedbacks, metrics }: OverviewTabProps) => {
+const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
   const stats = [
     { label: "Total Employees", value: manager.totalEmployees, icon: Users, color: "text-primary" },
     { label: "Avg Sentiment", value: `${(manager.sentimentScore * 100).toFixed(0)}%`, icon: TrendingUp, color: "text-success" },
@@ -166,20 +177,22 @@ const OverviewTab = ({ manager, feedbacks, metrics }: OverviewTabProps) => {
               <div>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Holistic Breakdown</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
-                  {Object.entries(manager.aiBreakdown).map(([key, value]) => (
-                    <div key={key} className="flex items-center gap-3">
-                      <span className="text-[11px] font-medium text-muted-foreground w-36 shrink-0 truncate">{breakdownLabels[key] || key}</span>
-                      <div className="flex-1 h-2 rounded-full bg-secondary/40 overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${value}%` }}
-                          transition={{ duration: 0.8, delay: 0.2 }}
-                          className={`h-full rounded-full ${getBarColor(value)}`}
-                        />
+                  {Object.entries(manager.aiBreakdown)
+                    .filter(([key]) => breakdownLabels[key] !== undefined)
+                    .map(([key, value]) => (
+                      <div key={key} className="flex items-center gap-3">
+                        <span className="text-[11px] font-medium text-muted-foreground w-36 shrink-0 truncate">{breakdownLabels[key] || key}</span>
+                        <div className="flex-1 h-2 rounded-full bg-secondary/40 overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${value}%` }}
+                            transition={{ duration: 0.8, delay: 0.2 }}
+                            className={`h-full rounded-full ${getBarColor(value)}`}
+                          />
+                        </div>
+                        <span className="text-[11px] font-bold text-foreground w-8 text-right">{value}</span>
                       </div>
-                      <span className="text-[11px] font-bold text-foreground w-8 text-right">{value}</span>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             )}
@@ -204,23 +217,25 @@ const OverviewTab = ({ manager, feedbacks, metrics }: OverviewTabProps) => {
             <h3 className="font-display text-lg font-semibold text-foreground">KPI Metrics Breakdown</h3>
           </div>
           <div className="space-y-4">
-            {metrics.map((m, i) => (
-              <div key={m._id} className="space-y-1.5">
-                <div className="flex justify-between text-xs font-medium">
-                  <span className="text-muted-foreground">{m.metricName}</span>
-                  <span className="text-foreground">{m.value}%</span>
+            {manager.extendedMetrics && Object.entries(manager.extendedMetrics)
+              .filter(([key]) => extendedMetricLabels[key] !== undefined)
+              .map(([key, value], i) => (
+                <div key={key} className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-muted-foreground">{extendedMetricLabels[key] || key}</span>
+                    <span className="text-foreground">{value}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${value}%` }}
+                      transition={{ duration: 0.8, delay: i * 0.05 }}
+                      className={`h-full rounded-full ${Number(value) >= 80 ? 'bg-emerald-500' : Number(value) >= 60 ? 'bg-primary' : 'bg-destructive'}`}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${m.value}%` }}
-                    transition={{ duration: 0.8, delay: i * 0.1 }}
-                    className={`h-full rounded-full ${m.value >= 80 ? 'bg-success' : m.value >= 50 ? 'bg-primary' : 'bg-destructive'}`}
-                  />
-                </div>
-              </div>
-            ))}
-            {metrics.length === 0 && (
+              ))}
+            {(!manager.extendedMetrics || Object.keys(manager.extendedMetrics).filter(k => extendedMetricLabels[k]).length === 0) && (
               <p className="text-sm text-muted-foreground text-center py-8 italic">No specific KPI metrics available.</p>
             )}
           </div>

@@ -184,7 +184,7 @@ const Index = () => {
             </TabsList>
 
             <TabsContent value="overview">
-              <OverviewTab manager={manager} feedbacks={feedbacks} metrics={metrics} />
+              <OverviewTab manager={manager} feedbacks={feedbacks} />
             </TabsContent>
             <TabsContent value="employees">
               <EmployeesTab employees={employees} />

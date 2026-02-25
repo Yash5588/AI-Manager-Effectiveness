@@ -108,6 +108,7 @@ exports.getManagerAnalytics = async (req, res) => {
     todayStart.setHours(0, 0, 0, 0);
 
     let aiResult;
+    const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId }) || {};
     const cachedSnapshot = await ScoreSnapshot.findOne({
       managerId,
       aiScore: { $exists: true, $ne: null },
@@ -123,13 +124,12 @@ exports.getManagerAnalytics = async (req, res) => {
         aiWeaknesses: cachedSnapshot.aiWeaknesses,
       };
     } else {
-      const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId });
       aiResult = await computeAIScore({
         manager: manager.toObject ? manager.toObject() : manager,
         employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
         feedbacks: feedbacks.map((f) => (f.toObject ? f.toObject() : f)),
         metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
-        extendedMetrics: extendedMetrics ? (extendedMetrics.toObject ? extendedMetrics.toObject() : extendedMetrics) : {},
+        extendedMetrics,
         breakdown,
         formulaScore,
       });
@@ -178,6 +178,7 @@ exports.getManagerAnalytics = async (req, res) => {
           ? aiResult.aiBreakdown.feedbackSentiment / 100
           : breakdown.avgFeedbackScore
       },
+      extendedMetrics: extendedMetrics.toObject ? extendedMetrics.toObject() : extendedMetrics,
       finalScore: aiResult.aiScore,
       aiScore: aiResult.aiScore,
       aiReasoning: aiResult.aiReasoning,

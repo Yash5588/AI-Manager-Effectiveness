@@ -6,6 +6,7 @@ const Employee = require("../models/Employee");
 const Feedback = require("../models/Feedback");
 const PerformanceMetric = require("../models/PerformanceMetric");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
+const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 
 /**
  * Helper: compute a manager's analytics inline
@@ -24,11 +25,12 @@ function getPerformanceCategory(score) {
 }
 
 async function computeManagerAnalytics(managerId) {
-    const [employees, feedbacks, metrics, latestSnapshot] = await Promise.all([
+    const [employees, feedbacks, metrics, latestSnapshot, extendedMetrics] = await Promise.all([
         Employee.find({ managerId }),
         Feedback.find({ managerId }),
         PerformanceMetric.find({ managerId }),
         ScoreSnapshot.findOne({ managerId, aiScore: { $exists: true } }).sort({ createdAt: -1 }),
+        ManagerExtendedMetrics.findOne({ managerId }),
     ]);
 
     const avgEmployeeScore =
@@ -73,6 +75,7 @@ async function computeManagerAnalytics(managerId) {
 
     return {
         breakdown,
+        extendedMetrics: extendedMetrics ? (extendedMetrics.toObject ? extendedMetrics.toObject() : extendedMetrics) : {},
         finalScore,
         category,
         counts: {
@@ -112,6 +115,7 @@ router.get("/:hrId/managers", async (req, res) => {
                                 : "Neutral",
                     category: analytics.category,
                     breakdown: analytics.breakdown,
+                    extendedMetrics: analytics.extendedMetrics,
                     counts: analytics.counts,
                 };
             })

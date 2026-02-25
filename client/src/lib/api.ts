@@ -48,6 +48,18 @@ export interface Metric {
   managerId: string;
 }
 
+export interface ExtendedMetrics {
+  teamRetentionRate?: number;
+  goalCompletionRate?: number;
+  oneOnOneFrequency?: number;
+  employeeGrowthRate?: number;
+  responseTimeScore?: number;
+  peerReviewScore?: number;
+  projectDeliveryTimeliness?: number;
+  employeeEngagementScore?: number;
+  trainingInvestment?: number;
+}
+
 export interface Manager {
   _id: string;
   id: string; // for compatibility
@@ -63,6 +75,7 @@ export interface Manager {
   aiStrengths?: string[];
   aiWeaknesses?: string[];
   aiBreakdown?: AIScoreBreakdown;
+  extendedMetrics?: ExtendedMetrics;
 }
 
 export interface Feedback {
@@ -176,6 +189,7 @@ export async function fetchManager(managerId?: string): Promise<Manager> {
       aiStrengths: analytics.aiStrengths,
       aiWeaknesses: analytics.aiWeaknesses,
       aiBreakdown: analytics.aiBreakdown,
+      extendedMetrics: analytics.extendedMetrics,
     };
   } else {
     const managers = await fetchManagers();
@@ -285,6 +299,7 @@ export interface HRManager {
   sentimentScore: number;
   sentimentLabel: "Positive" | "Neutral" | "Negative";
   category: string;
+  extendedMetrics?: ExtendedMetrics;
   breakdown: {
     avgEmployeeScore: number;
     avgFeedbackScore: number;
