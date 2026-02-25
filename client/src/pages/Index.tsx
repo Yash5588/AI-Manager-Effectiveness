@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Brain, LayoutDashboard, Users, Lightbulb, UserCheck, Loader2, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { LayoutDashboard, Users, Lightbulb, UserCheck, Loader2, ChevronDown, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OverviewTab from "@/components/tabs/OverviewTab";
 import EmployeesTab from "@/components/tabs/EmployeesTab";
 import SuggestionsTab from "@/components/tabs/SuggestionsTab";
 import EmployeeSuggestionsTab from "@/components/tabs/EmployeeSuggestionsTab";
 import {
-  fetchManagers,
   fetchManager,
   fetchEmployees,
   fetchFeedbacks,
@@ -27,8 +28,9 @@ import {
 import { Button } from "@/components/ui/button";
 
 const Index = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [managers, setManagers] = useState<Manager[]>([]);
   const [manager, setManager] = useState<Manager | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
@@ -37,24 +39,12 @@ const Index = () => {
   const [employeeSuggestions, setEmployeeSuggestions] = useState<EmployeeSuggestion[]>([]);
   const [empSugLoading, setEmpSugLoading] = useState(false);
 
-  // 1. Load list of managers
+  // 1. Load data for the logged in manager
   useEffect(() => {
-    async function loadManagers() {
-      try {
-        const list = await fetchManagers();
-        setManagers(list);
-        if (list.length > 0) {
-          handleManagerChange(list[0].id);
-        } else {
-          setLoading(false);
-        }
-      } catch (e) {
-        console.error("Failed to load managers:", e);
-        setLoading(false);
-      }
+    if (user?.id) {
+      handleManagerChange(user.id);
     }
-    loadManagers();
-  }, []);
+  }, [user?.id]);
 
   const handleManagerChange = async (managerId: string) => {
     setLoading(true);
@@ -137,8 +127,8 @@ const Index = () => {
       <header className="border-b border-border bg-card/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg gradient-primary flex items-center justify-center">
-              <Brain className="h-5 w-5 text-primary-foreground" />
+            <div className="h-8 w-auto flex items-center justify-center">
+              <img src="/darwinbox-logo.png" alt="Darwinbox" className="h-8 w-auto object-contain" />
             </div>
             <div>
               <h1 className="font-display text-lg font-bold text-foreground leading-none">
@@ -148,38 +138,25 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Manager Selector */}
+          {/* Logout */}
           <div className="flex items-center gap-3">
             {manager && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-[10px]">
-                      {manager.name.split(" ").map(n => n[0]).join("")}
-                    </div>
-                    <div className="text-left hidden sm:block">
-                      <span className="block text-sm font-medium leading-none">{manager.name}</span>
-                    </div>
-                    <ChevronDown className="h-4 w-4 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[200px]">
-                  {managers.map((m) => (
-                    <DropdownMenuItem key={m.id} onClick={() => handleManagerChange(m.id)}>
-                      <div className="flex items-center gap-2 w-full">
-                        <div className="h-5 w-5 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-[8px]">
-                          {m.name.split(" ").map(n => n[0]).join("")}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-sm">{m.name}</span>
-                          <span className="text-xs text-muted-foreground">{m.department}</span>
-                        </div>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-2 bg-secondary/50 px-3 py-1.5 rounded-lg border border-border">
+                <div className="h-6 w-6 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-[10px]">
+                  {manager.name.split(" ").map(n => n[0]).join("")}
+                </div>
+                <div className="text-left hidden sm:block">
+                  <span className="block text-sm font-medium leading-none">{manager.name}</span>
+                </div>
+              </div>
             )}
+            <button
+              onClick={() => { logout(); navigate("/login"); }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-all text-sm"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
           </div>
         </div>
       </header>

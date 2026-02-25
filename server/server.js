@@ -10,8 +10,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// app.use("/api/users", require("./routes/userRoutes"));
+// Auth routes
+app.use("/api/auth", require("./routes/authRoutes"));
 
+// Data routes
 app.use("/api/managers", require("./routes/managerRoutes"));
 app.use("/api/employees", require("./routes/employeeRoutes"));
 app.use("/api/feedback", require("./routes/feedbackRoutes"));

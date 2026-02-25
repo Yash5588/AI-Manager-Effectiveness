@@ -92,7 +92,7 @@ async function generateAISuggestions(payload) {
       ? feedbacks
         .map(
           (f) =>
-            `- ${f?.fromEmployee ?? "Anonymous"}: "${f?.comment ?? ""}" (${Math.round(
+            `- "Anonymous Feedback": "${f?.comment ?? ""}" (${Math.round(
               (f?.sentimentScore ?? 0) * 100
             )}%)`
         )
@@ -379,4 +379,86 @@ ${employeeDetails}
   throw new Error(msg);
 }
 
-module.exports = { generateAISuggestions, generateEmployeeSuggestions };
+/* ───────────────────────────────────────────────
+   Sentiment Analysis for Feedback
+   ─────────────────────────────────────────────── */
+async function analyzeSentiment(comment) {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is missing");
+  }
+
+  // ⏱ Rate limit protection
+  const now = Date.now();
+  if (now - lastCallTime < MIN_DELAY_MS) {
+    const wait = MIN_DELAY_MS - (now - lastCallTime);
+    console.log(`⏱ Sentiment Throttle: Waiting ${wait}ms...`);
+    await new Promise(r => setTimeout(r, wait));
+  }
+  lastCallTime = Date.now();
+
+  const prompt = `
+You are a sentiment analysis expert. Analyze the following employee feedback comment and return ONLY a single JSON object with one field:
+- "sentimentScore": a number between 0 and 1 where 0 = very negative, 0.5 = neutral, 1 = very positive
+
+No markdown, no explanation, ONLY the JSON object.
+
+Feedback: "${comment}"
+`.trim();
+
+  const models = [
+    "deepseek/deepseek-chat",
+    "deepseek/deepseek-r1",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "google/gemini-2.0-flash-exp:free"
+  ];
+
+  let lastError = null;
+  for (const model of models) {
+    try {
+      console.log("🧠 Sentiment model:", model);
+
+      const completion = await openRouterClient.chat.completions.create({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        max_tokens: 100,
+      });
+
+      const content = completion?.choices?.[0]?.message?.content;
+      if (content) {
+        const cleaned = content
+          .replace(/```json/gi, "")
+          .replace(/```/g, "")
+          .trim();
+
+        // Try to parse JSON object
+        const jsonStart = cleaned.indexOf("{");
+        const jsonEnd = cleaned.lastIndexOf("}");
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
+          const score = Number(parsed.sentimentScore);
+          if (!isNaN(score) && score >= 0 && score <= 1) {
+            return Math.round(score * 100) / 100;
+          }
+        }
+
+        // Fallback: try extracting a number directly
+        const numMatch = cleaned.match(/0?\.\d+/);
+        if (numMatch) {
+          const score = Number(numMatch[0]);
+          if (score >= 0 && score <= 1) return Math.round(score * 100) / 100;
+        }
+      }
+    } catch (err) {
+      console.error(`❌ Sentiment Model ${model} failed:`, err.message);
+      lastError = err?.message || String(err);
+    }
+  }
+
+  // If all models fail, return a neutral score
+  console.warn("⚠️ All sentiment models failed, defaulting to 0.5");
+  return 0.5;
+}
+
+module.exports = { generateAISuggestions, generateEmployeeSuggestions, analyzeSentiment };

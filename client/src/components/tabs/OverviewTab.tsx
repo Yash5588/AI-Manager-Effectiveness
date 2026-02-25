@@ -67,11 +67,10 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="glass-card rounded-lg p-6 flex flex-col items-center justify-center"
         >
-          <div className={`text-2xl font-display font-bold ${
-            manager.sentimentLabel === "Positive" ? "text-success"
-              : manager.sentimentLabel === "Negative" ? "text-destructive"
+          <div className={`text-2xl font-display font-bold ${manager.sentimentLabel === "Positive" ? "text-success"
+            : manager.sentimentLabel === "Negative" ? "text-destructive"
               : "text-accent"
-          }`}>
+            }`}>
             {manager.sentimentLabel}
           </div>
           <span className="mt-2 text-sm font-medium text-muted-foreground">Overall Sentiment</span>
@@ -87,20 +86,22 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
       >
         <h3 className="font-display text-lg font-semibold text-foreground mb-4">Recent Feedbacks</h3>
         <div className="space-y-3">
-          {feedbacks.slice(0, 4).map((fb) => (
-            <div key={fb.id} className="flex items-start gap-3 p-3 rounded-md bg-secondary/50">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-foreground">{fb.employeeName}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    fb.sentimentLabel === "Positive" ? "bg-success/15 text-success"
-                      : fb.sentimentLabel === "Negative" ? "bg-destructive/15 text-destructive"
-                      : "bg-accent/15 text-accent"
-                  }`}>{fb.sentimentLabel}</span>
-                  <span className="text-xs text-muted-foreground ml-auto">{fb.date}</span>
-                </div>
-                <p className="text-sm text-muted-foreground truncate">{fb.text}</p>
+          {feedbacks.slice(0, 8).map((fb) => (
+            <div key={fb.id} className="group flex items-center justify-between gap-4 p-3.5 rounded-xl bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border/50 transition-all">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <span className={`shrink-0 text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded-lg border ${fb.sentimentLabel === "Positive" ? "bg-success/10 text-success border-success/20"
+                    : fb.sentimentLabel === "Negative" ? "bg-destructive/10 text-destructive border-destructive/20"
+                      : "bg-accent/10 text-accent border-accent/20"
+                  }`}>
+                  {fb.sentimentLabel}
+                </span>
+                <p className="text-sm text-foreground/90 font-medium truncate leading-none">
+                  {fb.text}
+                </p>
               </div>
+              <time className="text-[10px] tabular-nums font-medium text-muted-foreground/50">
+                {new Date(fb.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </time>
             </div>
           ))}
         </div>
