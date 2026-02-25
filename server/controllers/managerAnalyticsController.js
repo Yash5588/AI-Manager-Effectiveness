@@ -2,6 +2,7 @@ const Manager = require("../models/Manager");
 const Employee = require("../models/Employee");
 const Feedback = require("../models/Feedback");
 const PerformanceMetric = require("../models/PerformanceMetric");
+const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { generateAISuggestions, generateEmployeeSuggestions } = require("../services/aiSuggestionsService");
 
 /**
@@ -102,6 +103,31 @@ exports.getManagerAnalytics = async (req, res) => {
     // 5. Categorize (suggestions fetched separately via /suggestions endpoint)
     const category = getPerformanceCategory(finalScore);
     const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
+
+    // ── Auto-save score snapshot (max 1 per manager per day) ──
+    try {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const existingToday = await ScoreSnapshot.findOne({
+        managerId,
+        createdAt: { $gte: todayStart },
+      });
+
+      if (!existingToday) {
+        await ScoreSnapshot.create({
+          managerId,
+          finalScore,
+          breakdown,
+          category,
+          counts,
+        });
+        console.log(`📸 Score snapshot saved for ${manager.name} (${finalScore})`);
+      }
+    } catch (snapErr) {
+      // Non-blocking: don't fail the analytics call if snapshot save fails
+      console.warn("⚠️ Failed to save score snapshot:", snapErr.message);
+    }
 
     const response = {
       manager,

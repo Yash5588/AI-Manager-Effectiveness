@@ -23,6 +23,10 @@ const ManagerSchema = new mongoose.Schema(
     experienceYears: {
       type: Number,
       required: true
+    },
+    hrId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "HR",
     }
   },
   { timestamps: true }

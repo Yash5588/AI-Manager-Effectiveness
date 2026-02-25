@@ -5,8 +5,9 @@ interface User {
     id: string;
     name: string;
     email: string;
-    role: "manager" | "employee";
+    role: "manager" | "employee" | "hr";
     department?: string;
+    designation?: string;
     jobRole?: string;
     managerId?: string;
 }
@@ -14,7 +15,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    login: (email: string, password: string, role: "manager" | "employee") => Promise<void>;
+    login: (email: string, password: string, role: "manager" | "employee" | "hr") => Promise<void>;
     logout: () => void;
     isLoading: boolean;
 }
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
     }, []);
 
-    const login = async (email: string, password: string, role: "manager" | "employee") => {
+    const login = async (email: string, password: string, role: "manager" | "employee" | "hr") => {
         const res = await api.post("/auth/login", { email, password, role });
         const { token: newToken, user: userData } = res.data;
 

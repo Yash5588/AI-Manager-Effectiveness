@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Users, TrendingUp, BarChart3, MessageSquare } from "lucide-react";
 import ScoreGauge from "@/components/ScoreGauge";
+import ScoreTrendChart from "@/components/ScoreTrendChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import type { Manager, Feedback } from "@/lib/api";
 
@@ -77,6 +78,12 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
         </motion.div>
       </div>
 
+      {/* Score Trend Timeline */}
+      <ScoreTrendChart
+        managerId={manager._id}
+        currentScore={manager.effectivenessScore}
+      />
+
       {/* Recent Feedbacks */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -90,8 +97,8 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
             <div key={fb.id} className="group flex items-center justify-between gap-4 p-3.5 rounded-xl bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border/50 transition-all">
               <div className="flex items-center gap-4 flex-1 min-w-0">
                 <span className={`shrink-0 text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded-lg border ${fb.sentimentLabel === "Positive" ? "bg-success/10 text-success border-success/20"
-                    : fb.sentimentLabel === "Negative" ? "bg-destructive/10 text-destructive border-destructive/20"
-                      : "bg-accent/10 text-accent border-accent/20"
+                  : fb.sentimentLabel === "Negative" ? "bg-destructive/10 text-destructive border-destructive/20"
+                    : "bg-accent/10 text-accent border-accent/20"
                   }`}>
                   {fb.sentimentLabel}
                 </span>

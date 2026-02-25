@@ -74,6 +74,24 @@ export interface EmployeeSuggestion {
   rationale: string;
 }
 
+export interface ScoreSnapshot {
+  _id: string;
+  managerId: string;
+  finalScore: number;
+  breakdown: {
+    avgEmployeeScore: number;
+    avgFeedbackScore: number;
+    avgMetricScore: number;
+  };
+  category: string;
+  counts: {
+    employees: number;
+    feedbacks: number;
+    metrics: number;
+  };
+  createdAt: string;
+}
+
 // Helper to derive label from score
 function getSentimentLabel(score: number): "Positive" | "Neutral" | "Negative" {
   if (score >= 0.6) return "Positive";
@@ -177,4 +195,117 @@ export async function fetchEmployeeSuggestions(
 }
 
 export default api;
+
+// ========== SCORE SNAPSHOTS (Historical Trend) ==========
+
+export async function fetchScoreSnapshots(
+  managerId: string,
+  days: number = 90
+): Promise<ScoreSnapshot[]> {
+  const res = await api.get(`/score-snapshots/${managerId}`, {
+    params: { days },
+  });
+  return res.data;
+}
+
+// ========== HR API ==========
+
+export interface HRManager {
+  _id: string;
+  name: string;
+  department: string;
+  email: string;
+  experienceYears: number;
+  effectivenessScore: number;
+  sentimentScore: number;
+  sentimentLabel: "Positive" | "Neutral" | "Negative";
+  category: string;
+  breakdown: {
+    avgEmployeeScore: number;
+    avgFeedbackScore: number;
+    avgMetricScore: number;
+  };
+  counts: {
+    employees: number;
+    feedbacks: number;
+    metrics: number;
+  };
+}
+
+export interface HROverview {
+  totalManagers: number;
+  totalEmployees: number;
+  totalFeedbacks: number;
+  avgEffectiveness: number;
+  avgSentiment: number;
+}
+
+export interface HierarchyEmployee {
+  id: string;
+  name: string;
+  role: string;
+  performanceRating: number;
+  email: string;
+}
+
+export interface HierarchyManager {
+  id: string;
+  name: string;
+  department: string;
+  email: string;
+  experienceYears: number;
+  effectivenessScore: number;
+  category: string;
+  sentimentScore: number;
+  employees: HierarchyEmployee[];
+}
+
+export interface HierarchyData {
+  hr: {
+    id: string;
+    name: string;
+    email: string;
+    department: string;
+    designation: string;
+  };
+  managers: HierarchyManager[];
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  rank: number;
+  name: string;
+  department: string;
+  email: string;
+  experienceYears: number;
+  effectivenessScore: number;
+  sentimentScore: number;
+  category: string;
+  counts: {
+    employees: number;
+    feedbacks: number;
+    metrics: number;
+  };
+  trend: number;
+}
+
+export async function fetchHRManagers(hrId: string): Promise<HRManager[]> {
+  const res = await api.get(`/hr/${hrId}/managers`);
+  return res.data;
+}
+
+export async function fetchHROverview(hrId: string): Promise<HROverview> {
+  const res = await api.get(`/hr/${hrId}/overview`);
+  return res.data;
+}
+
+export async function fetchHierarchy(hrId: string): Promise<HierarchyData> {
+  const res = await api.get(`/hr/${hrId}/hierarchy`);
+  return res.data;
+}
+
+export async function fetchLeaderboard(hrId: string): Promise<LeaderboardEntry[]> {
+  const res = await api.get(`/hr/${hrId}/leaderboard`);
+  return res.data;
+}
 

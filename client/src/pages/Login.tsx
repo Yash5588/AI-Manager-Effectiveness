@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, LogIn, Shield, User } from "lucide-react";
+import { Loader2, LogIn, Shield, User, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const Login = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [role, setRole] = useState<"manager" | "employee">("manager");
+    const [role, setRole] = useState<"manager" | "employee" | "hr">("manager");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const { login } = useAuth();
@@ -22,6 +22,8 @@ const Login = () => {
             await login(email, password, role);
             if (role === "manager") {
                 navigate("/");
+            } else if (role === "hr") {
+                navigate("/hr");
             } else {
                 navigate("/employee/feedback");
             }
@@ -64,6 +66,17 @@ const Login = () => {
                     <div className="flex gap-2 mb-6">
                         <button
                             type="button"
+                            onClick={() => setRole("hr")}
+                            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${role === "hr"
+                                ? "gradient-primary text-primary-foreground shadow-lg"
+                                : "bg-secondary text-muted-foreground hover:text-foreground"
+                                }`}
+                        >
+                            <Building2 className="h-4 w-4" />
+                            HR
+                        </button>
+                        <button
+                            type="button"
                             onClick={() => setRole("manager")}
                             className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${role === "manager"
                                 ? "gradient-primary text-primary-foreground shadow-lg"
@@ -95,7 +108,7 @@ const Login = () => {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder={role === "manager" ? "jordan.lee@company.com" : "sam.wilson@company.com"}
+                                placeholder={role === "hr" ? "priya.sharma@company.com" : role === "manager" ? "jordan.lee@company.com" : "sam.wilson@company.com"}
                                 className="w-full px-4 py-2.5 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                                 required
                             />
@@ -135,14 +148,19 @@ const Login = () => {
                             ) : (
                                 <LogIn className="h-4 w-4" />
                             )}
-                            {loading ? "Signing in..." : `Sign in as ${role === "manager" ? "Manager" : "Employee"}`}
+                            {loading ? "Signing in..." : `Sign in as ${role === "hr" ? "HR" : role === "manager" ? "Manager" : "Employee"}`}
                         </button>
                     </form>
 
                     {/* Demo credentials hint */}
                     <div className="mt-6 p-3 rounded-lg bg-secondary/80 border border-border">
                         <p className="text-xs font-medium text-muted-foreground mb-2">Demo Credentials:</p>
-                        {role === "manager" ? (
+                        {role === "hr" ? (
+                            <div className="text-xs text-muted-foreground space-y-0.5">
+                                <p><span className="text-foreground font-medium">priya.sharma@company.com</span> / password123</p>
+                                <p><span className="text-foreground font-medium">raj.patel@company.com</span> / password123</p>
+                            </div>
+                        ) : role === "manager" ? (
                             <div className="text-xs text-muted-foreground space-y-0.5">
                                 <p><span className="text-foreground font-medium">jordan.lee@company.com</span> / password123</p>
                                 <p><span className="text-foreground font-medium">alex.morgan@company.com</span> / password123</p>
