@@ -33,6 +33,7 @@ const Index = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const [sugsLoading, setSugsLoading] = useState(false);
   const [employeeSuggestions, setEmployeeSuggestions] = useState<EmployeeSuggestion[]>([]);
   const [empSugLoading, setEmpSugLoading] = useState(false);
 
@@ -58,21 +59,47 @@ const Index = () => {
   const handleManagerChange = async (managerId: string) => {
     setLoading(true);
     setEmployeeSuggestions([]);
+    setSuggestions([]);
     try {
       const mgr = await fetchManager(managerId);
       setManager(mgr);
-      const [emps, fbs, sugs] = await Promise.all([
+
+      // Load employees & feedbacks (required data)
+      const [emps, fbs] = await Promise.all([
         fetchEmployees(mgr.id),
         fetchFeedbacks(mgr.id),
-        fetchAISuggestions(mgr.id),
       ]);
       setEmployees(emps);
       setFeedbacks(fbs);
-      setSuggestions(sugs);
+
+      // Load AI suggestions separately (non-blocking, graceful failure)
+      try {
+        setSugsLoading(true);
+        const sugs = await fetchAISuggestions(mgr.id);
+        setSuggestions(sugs);
+      } catch (sugErr) {
+        console.warn("AI suggestions failed (API key issue?):", sugErr);
+        setSuggestions([]);
+      } finally {
+        setSugsLoading(false);
+      }
     } catch (e) {
       console.error("Failed to load manager details:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateSuggestions = async () => {
+    if (!manager) return;
+    setSugsLoading(true);
+    try {
+      const sugs = await fetchAISuggestions(manager.id);
+      setSuggestions(sugs);
+    } catch (e) {
+      console.error("Failed to generate suggestions:", e);
+    } finally {
+      setSugsLoading(false);
     }
   };
 
@@ -181,7 +208,12 @@ const Index = () => {
               <EmployeesTab employees={employees} />
             </TabsContent>
             <TabsContent value="suggestions">
-              <SuggestionsTab suggestions={suggestions} currentScore={manager.effectivenessScore} />
+              <SuggestionsTab
+                suggestions={suggestions}
+                currentScore={manager.effectivenessScore}
+                loading={sugsLoading}
+                onGenerate={handleGenerateSuggestions}
+              />
             </TabsContent>
             <TabsContent value="employee-suggestions">
               <EmployeeSuggestionsTab

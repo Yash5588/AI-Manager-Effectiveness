@@ -1,7 +1,7 @@
 const OpenAI = require("openai").default;
 
 /* ───────────────────────────────────────────────
-   1️⃣ Create ONE OpenRouter client (GLOBAL)
+   Create ONE OpenRouter client (GLOBAL)
    ─────────────────────────────────────────────── */
 const openRouterClient = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -13,13 +13,13 @@ const openRouterClient = new OpenAI({
 });
 
 /* ───────────────────────────────────────────────
-   2️⃣ Rate-limit guard (prevents Cloudflare ban)
+   Rate-limit guard (prevents Cloudflare ban)
    ─────────────────────────────────────────────── */
 let lastCallTime = 0;
 const MIN_DELAY_MS = 1500;
 
 /* ───────────────────────────────────────────────
-   3️⃣ Safe JSON array parser
+   Safe JSON array parser
    ─────────────────────────────────────────────── */
 function safeParseJSONArray(text) {
   try {
@@ -43,7 +43,7 @@ function safeParseJSONArray(text) {
 }
 
 /* ───────────────────────────────────────────────
-   4️⃣ Main AI suggestion generator
+   Main AI suggestion generator
    ─────────────────────────────────────────────── */
 async function generateAISuggestions(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
@@ -53,9 +53,11 @@ async function generateAISuggestions(payload) {
   // ⏱ Rate limit protection
   const now = Date.now();
   if (now - lastCallTime < MIN_DELAY_MS) {
-    throw new Error("AI requests too frequent – throttled");
+    const wait = MIN_DELAY_MS - (now - lastCallTime);
+    console.log(`⏱ AI Throttle: Waiting ${wait}ms...`);
+    await new Promise(r => setTimeout(r, wait));
   }
-  lastCallTime = now;
+  lastCallTime = Date.now();
 
   const {
     manager,
@@ -141,12 +143,14 @@ ${metricsSummary}
 `.trim();
 
   /* ───────────────────────────────────────────────
-     5️⃣ Model fallback logic (IMPORTANT)
+     Model fallback logic (IMPORTANT)
      ─────────────────────────────────────────────── */
   const models = [
     "deepseek/deepseek-chat",
     "deepseek/deepseek-r1",
-    "meta-llama/llama-3.2-3b-instruct:free"
+    "qwen/qwen-2.5-72b-instruct:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "google/gemini-2.0-flash-exp:free"
   ];
 
   let lastError = null;
@@ -184,6 +188,10 @@ ${metricsSummary}
         });
       }
     } catch (err) {
+      console.error(`❌ Model ${model} failed:`, err.message);
+      if (err.response) {
+        console.error("Response data:", JSON.stringify(err.response.data));
+      }
       lastError =
         err?.response?.data?.error?.message ||
         err?.error?.message ||
@@ -200,7 +208,7 @@ ${metricsSummary}
 }
 
 /* ───────────────────────────────────────────────
-   6️⃣ Per-Employee Suggestion Generator
+  Per-Employee Suggestion Generator
    ─────────────────────────────────────────────── */
 async function generateEmployeeSuggestions(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
@@ -312,7 +320,9 @@ ${employeeDetails}
   const models = [
     "deepseek/deepseek-chat",
     "deepseek/deepseek-r1",
+    "qwen/qwen-2.5-72b-instruct:free",
     "meta-llama/llama-3.2-3b-instruct:free",
+    "google/gemini-2.0-flash-exp:free"
   ];
 
   let lastError = null;
@@ -350,6 +360,10 @@ ${employeeDetails}
         });
       }
     } catch (err) {
+      console.error(`❌ Employee Model ${model} failed:`, err.message);
+      if (err.response) {
+        console.error("Response data:", JSON.stringify(err.response.data));
+      }
       lastError =
         err?.response?.data?.error?.message ||
         err?.error?.message ||
