@@ -24,10 +24,11 @@ function getPerformanceCategory(score) {
 }
 
 async function computeManagerAnalytics(managerId) {
-    const [employees, feedbacks, metrics] = await Promise.all([
+    const [employees, feedbacks, metrics, latestSnapshot] = await Promise.all([
         Employee.find({ managerId }),
         Feedback.find({ managerId }),
         PerformanceMetric.find({ managerId }),
+        ScoreSnapshot.findOne({ managerId, aiScore: { $exists: true } }).sort({ createdAt: -1 }),
     ]);
 
     const avgEmployeeScore =
@@ -43,15 +44,31 @@ async function computeManagerAnalytics(managerId) {
             ? metrics.reduce((s, m) => s + normalizeMetricValue(m.value), 0) / metrics.length
             : 0.5;
 
-    const breakdown = {
+    let breakdown = {
         avgEmployeeScore: Math.round(avgEmployeeScore * 100) / 100,
         avgFeedbackScore: Math.round(avgFeedbackScore * 100) / 100,
         avgMetricScore: Math.round(avgMetricScore * 100) / 100,
     };
 
-    const finalScore = Math.round(
-        (avgEmployeeScore * 0.4 + avgFeedbackScore * 0.3 + avgMetricScore * 0.3) * 100
-    );
+    let finalScore;
+    if (latestSnapshot) {
+        finalScore = latestSnapshot.aiScore;
+        if (latestSnapshot.aiBreakdown) {
+            // Include AI breakdown if available, but keep primary 3 for UI compatibility where needed
+            breakdown = { ...breakdown, ...latestSnapshot.aiBreakdown };
+
+            // Sync AI feedback sentiment (0-100) with avgFeedbackScore (0-1) for compatibility
+            if (latestSnapshot.aiBreakdown.feedbackSentiment !== undefined) {
+                breakdown.avgFeedbackScore = latestSnapshot.aiBreakdown.feedbackSentiment / 100;
+            }
+        }
+    } else {
+        // Fallback to formula ONLY if no AI score has ever been computed
+        finalScore = Math.round(
+            (avgEmployeeScore * 0.4 + avgFeedbackScore * 0.3 + avgMetricScore * 0.3) * 100
+        );
+    }
+
     const category = getPerformanceCategory(finalScore);
 
     return {
@@ -79,14 +96,18 @@ router.get("/:hrId/managers", async (req, res) => {
         const managersWithAnalytics = await Promise.all(
             managers.map(async (mgr) => {
                 const analytics = await computeManagerAnalytics(mgr._id);
+                const sScore = analytics.breakdown.feedbackSentiment !== undefined
+                    ? analytics.breakdown.feedbackSentiment / 100
+                    : analytics.breakdown.avgFeedbackScore;
+
                 return {
                     ...mgr.toObject(),
                     effectivenessScore: analytics.finalScore,
-                    sentimentScore: analytics.breakdown.avgFeedbackScore,
+                    sentimentScore: sScore,
                     sentimentLabel:
-                        analytics.breakdown.avgFeedbackScore >= 0.6
+                        sScore >= 0.6
                             ? "Positive"
-                            : analytics.breakdown.avgFeedbackScore <= 0.4
+                            : sScore <= 0.4
                                 ? "Negative"
                                 : "Neutral",
                     category: analytics.category,

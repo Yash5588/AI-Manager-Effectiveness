@@ -6,6 +6,7 @@ const Employee = require("./models/Employee");
 const Feedback = require("./models/Feedback");
 const PerformanceMetric = require("./models/PerformanceMetric");
 const ScoreSnapshot = require("./models/ScoreSnapshot");
+const ManagerExtendedMetrics = require("./models/ManagerExtendedMetrics");
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ const seedData = async () => {
             Feedback.deleteMany({}),
             PerformanceMetric.deleteMany({}),
             ScoreSnapshot.deleteMany({}),
+            ManagerExtendedMetrics.deleteMany({}),
         ]);
         console.log("Cleared all existing data.\n");
 
@@ -89,6 +91,19 @@ const seedData = async () => {
             { metricName: "Budget Adherence", value: 80, managerId: neutralManager._id },
         ]);
 
+        await ManagerExtendedMetrics.create({
+            managerId: neutralManager._id,
+            teamRetentionRate: 75,
+            goalCompletionRate: 60,
+            oneOnOneFrequency: 50,
+            employeeGrowthRate: 40,
+            responseTimeScore: 55,
+            peerReviewScore: 58,
+            projectDeliveryTimeliness: 65,
+            employeeEngagementScore: 50,
+            trainingInvestment: 35,
+        });
+
         // ── Manager 2: Negative (Sales) ──
         const negativeManager = await Manager.create({
             name: "Alex Morgan",
@@ -118,6 +133,19 @@ const seedData = async () => {
             { metricName: "Team Morale Survey", value: 20, managerId: negativeManager._id },
         ]);
 
+        await ManagerExtendedMetrics.create({
+            managerId: negativeManager._id,
+            teamRetentionRate: 45,
+            goalCompletionRate: 30,
+            oneOnOneFrequency: 20,
+            employeeGrowthRate: 10,
+            responseTimeScore: 25,
+            peerReviewScore: 30,
+            projectDeliveryTimeliness: 35,
+            employeeEngagementScore: 20,
+            trainingInvestment: 15,
+        });
+
         // ── Manager 3: Positive (Product) ──
         const positiveManager = await Manager.create({
             name: "Diana Prince",
@@ -146,7 +174,21 @@ const seedData = async () => {
             { metricName: "Team Velocity", value: 95, managerId: positiveManager._id },
         ]);
 
+        await ManagerExtendedMetrics.create({
+            managerId: positiveManager._id,
+            teamRetentionRate: 95,
+            goalCompletionRate: 92,
+            oneOnOneFrequency: 90,
+            employeeGrowthRate: 85,
+            responseTimeScore: 88,
+            peerReviewScore: 92,
+            projectDeliveryTimeliness: 96,
+            employeeEngagementScore: 93,
+            trainingInvestment: 80,
+        });
+
         // ==========================================
+
         //  HR 2's MANAGERS (3 new ones)
         // ==========================================
 
@@ -182,6 +224,19 @@ const seedData = async () => {
             { metricName: "Deployment Frequency", value: 78, managerId: engManager._id },
         ]);
 
+        await ManagerExtendedMetrics.create({
+            managerId: engManager._id,
+            teamRetentionRate: 88,
+            goalCompletionRate: 82,
+            oneOnOneFrequency: 75,
+            employeeGrowthRate: 70,
+            responseTimeScore: 80,
+            peerReviewScore: 82,
+            projectDeliveryTimeliness: 85,
+            employeeEngagementScore: 78,
+            trainingInvestment: 72,
+        });
+
         // ── Manager 5: Mixed (Marketing) ──
         const mktManager = await Manager.create({
             name: "Sneha Kapoor",
@@ -210,6 +265,19 @@ const seedData = async () => {
             { metricName: "Lead Generation", value: 58, managerId: mktManager._id },
             { metricName: "Brand Awareness Score", value: 70, managerId: mktManager._id },
         ]);
+
+        await ManagerExtendedMetrics.create({
+            managerId: mktManager._id,
+            teamRetentionRate: 70,
+            goalCompletionRate: 55,
+            oneOnOneFrequency: 45,
+            employeeGrowthRate: 35,
+            responseTimeScore: 50,
+            peerReviewScore: 48,
+            projectDeliveryTimeliness: 58,
+            employeeEngagementScore: 42,
+            trainingInvestment: 30,
+        });
 
         // ── Manager 6: Low (Customer Support) ──
         const csManager = await Manager.create({
@@ -241,6 +309,19 @@ const seedData = async () => {
             { metricName: "Customer Satisfaction", value: 45, managerId: csManager._id },
             { metricName: "Ticket Resolution Rate", value: 55, managerId: csManager._id },
         ]);
+
+        await ManagerExtendedMetrics.create({
+            managerId: csManager._id,
+            teamRetentionRate: 55,
+            goalCompletionRate: 40,
+            oneOnOneFrequency: 30,
+            employeeGrowthRate: 15,
+            responseTimeScore: 35,
+            peerReviewScore: 38,
+            projectDeliveryTimeliness: 42,
+            employeeEngagementScore: 28,
+            trainingInvestment: 20,
+        });
 
         // ==========================================
         //  SCORE SNAPSHOTS (30 days for all 6 managers)

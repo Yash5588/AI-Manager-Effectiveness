@@ -25,6 +25,24 @@ const ScoreSnapshotSchema = new mongoose.Schema(
             feedbacks: { type: Number, default: 0 },
             metrics: { type: Number, default: 0 },
         },
+        // ── AI-enhanced score fields (cached from LLM) ──
+        aiScore: {
+            type: Number,
+            min: 0,
+            max: 100,
+        },
+        aiBreakdown: {
+            type: mongoose.Schema.Types.Mixed,
+        },
+        aiReasoning: {
+            type: String,
+        },
+        aiStrengths: {
+            type: [String],
+        },
+        aiWeaknesses: {
+            type: [String],
+        },
     },
     { timestamps: true }
 );

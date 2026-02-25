@@ -25,6 +25,29 @@ export interface Employee {
   feedbacks?: any[];
 }
 
+export interface AIScoreBreakdown {
+  [key: string]: number;
+  employeePerformance: number;
+  feedbackSentiment: number;
+  kpiMetrics: number;
+  teamRetention: number;
+  goalCompletion: number;
+  oneOnOneQuality: number;
+  employeeGrowth: number;
+  responsiveness: number;
+  peerReview: number;
+  projectDelivery: number;
+  engagement: number;
+  trainingDevelopment: number;
+}
+
+export interface Metric {
+  _id: string;
+  metricName: string;
+  value: number;
+  managerId: string;
+}
+
 export interface Manager {
   _id: string;
   id: string; // for compatibility
@@ -36,6 +59,10 @@ export interface Manager {
   totalEmployees: number;
   email?: string;
   experienceYears?: number;
+  aiReasoning?: string;
+  aiStrengths?: string[];
+  aiWeaknesses?: string[];
+  aiBreakdown?: AIScoreBreakdown;
 }
 
 export interface Feedback {
@@ -90,6 +117,11 @@ export interface ScoreSnapshot {
     metrics: number;
   };
   createdAt: string;
+  aiScore?: number;
+  aiBreakdown?: AIScoreBreakdown;
+  aiReasoning?: string;
+  aiStrengths?: string[];
+  aiWeaknesses?: string[];
 }
 
 // Helper to derive label from score
@@ -133,9 +165,17 @@ export async function fetchManager(managerId?: string): Promise<Manager> {
       email: mgr.email,
       experienceYears: mgr.experienceYears,
       effectivenessScore: analytics.finalScore || 0,
-      sentimentScore: analytics.breakdown?.avgFeedbackScore || 0,
-      sentimentLabel: getSentimentLabel(analytics.breakdown?.avgFeedbackScore || 0),
+      sentimentScore: (analytics.breakdown?.feedbackSentiment !== undefined
+        ? analytics.breakdown.feedbackSentiment / 100
+        : (analytics.breakdown?.avgFeedbackScore ?? 0)),
+      sentimentLabel: getSentimentLabel((analytics.breakdown?.feedbackSentiment !== undefined
+        ? analytics.breakdown.feedbackSentiment / 100
+        : (analytics.breakdown?.avgFeedbackScore ?? 0))),
       totalEmployees: analytics.counts?.employees || 0,
+      aiReasoning: analytics.aiReasoning,
+      aiStrengths: analytics.aiStrengths,
+      aiWeaknesses: analytics.aiWeaknesses,
+      aiBreakdown: analytics.aiBreakdown,
     };
   } else {
     const managers = await fetchManagers();
@@ -175,6 +215,11 @@ export async function fetchFeedbacks(managerId: string): Promise<Feedback[]> {
   }));
 }
 
+export async function fetchMetrics(managerId: string): Promise<Metric[]> {
+  const res = await api.get(`/metrics/manager/${managerId}`);
+  return res.data;
+}
+
 export async function fetchAISuggestions(managerId: string): Promise<AISuggestion[]> {
   const res = await api.post(`/manager-analytics/${managerId}/suggestions`);
   const raw = res.data.suggestions || [];
@@ -192,6 +237,26 @@ export async function fetchEmployeeSuggestions(
     employeeSuggestions: res.data.employeeSuggestions || [],
     currentScore: res.data.currentScore || 0,
   };
+}
+
+// ========== AI-ENHANCED SCORE ==========
+
+
+
+export interface AIScoreResult {
+  cached: boolean;
+  aiScore: number;
+  aiBreakdown: AIScoreBreakdown;
+  aiReasoning: string;
+  aiStrengths: string[];
+  aiWeaknesses: string[];
+  formulaScore: number;
+  cachedAt?: string;
+}
+
+export async function fetchAIScore(managerId: string): Promise<AIScoreResult> {
+  const res = await api.get(`/manager-analytics/${managerId}/ai-score`);
+  return res.data;
 }
 
 export default api;

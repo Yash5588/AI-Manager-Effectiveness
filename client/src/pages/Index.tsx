@@ -11,11 +11,13 @@ import {
   fetchManager,
   fetchEmployees,
   fetchFeedbacks,
+  fetchMetrics,
   fetchAISuggestions,
   fetchEmployeeSuggestions,
   type Manager,
   type Employee,
   type Feedback,
+  type Metric,
   type AISuggestion,
   type EmployeeSuggestion,
 } from "@/lib/api";
@@ -38,6 +40,7 @@ const Index = () => {
   const [sugsLoading, setSugsLoading] = useState(false);
   const [employeeSuggestions, setEmployeeSuggestions] = useState<EmployeeSuggestion[]>([]);
   const [empSugLoading, setEmpSugLoading] = useState(false);
+  const [metrics, setMetrics] = useState<Metric[]>([]);
 
   // 1. Load data for the logged in manager
   useEffect(() => {
@@ -55,12 +58,14 @@ const Index = () => {
       setManager(mgr);
 
       // Load employees & feedbacks (required data)
-      const [emps, fbs] = await Promise.all([
+      const [emps, fbs, mtr] = await Promise.all([
         fetchEmployees(mgr.id),
         fetchFeedbacks(mgr.id),
+        fetchMetrics(mgr.id),
       ]);
       setEmployees(emps);
       setFeedbacks(fbs);
+      setMetrics(mtr);
 
       // Load AI suggestions separately (non-blocking, graceful failure)
       try {
@@ -179,7 +184,7 @@ const Index = () => {
             </TabsList>
 
             <TabsContent value="overview">
-              <OverviewTab manager={manager} feedbacks={feedbacks} />
+              <OverviewTab manager={manager} feedbacks={feedbacks} metrics={metrics} />
             </TabsContent>
             <TabsContent value="employees">
               <EmployeesTab employees={employees} />

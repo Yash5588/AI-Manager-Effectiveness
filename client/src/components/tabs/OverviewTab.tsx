@@ -1,21 +1,44 @@
 import { motion } from "framer-motion";
-import { Users, TrendingUp, BarChart3, MessageSquare } from "lucide-react";
+import { Users, TrendingUp, BarChart3, MessageSquare, Brain, Sparkles } from "lucide-react";
 import ScoreGauge from "@/components/ScoreGauge";
 import ScoreTrendChart from "@/components/ScoreTrendChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
-import type { Manager, Feedback } from "@/lib/api";
+import type { Manager, Feedback, Metric } from "@/lib/api";
 
 interface OverviewTabProps {
   manager: Manager;
   feedbacks: Feedback[];
+  metrics: Metric[];
 }
 
-const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
+const breakdownLabels: Record<string, string> = {
+  employeePerformance: "Employee Performance",
+  feedbackSentiment: "Feedback Sentiment",
+  kpiMetrics: "KPI Metrics",
+  teamRetention: "Team Retention",
+  goalCompletion: "Goal Completion",
+  oneOnOneQuality: "1-on-1 Quality",
+  employeeGrowth: "Employee Growth",
+  responsiveness: "Responsiveness",
+  peerReview: "Peer Review",
+  projectDelivery: "Project Delivery",
+  engagement: "Engagement",
+  trainingDevelopment: "Training & Dev",
+};
+
+function getBarColor(value: number): string {
+  if (value >= 80) return "bg-emerald-500";
+  if (value >= 60) return "bg-blue-500";
+  if (value >= 40) return "bg-amber-500";
+  return "bg-red-500";
+}
+
+const OverviewTab = ({ manager, feedbacks, metrics }: OverviewTabProps) => {
   const stats = [
     { label: "Total Employees", value: manager.totalEmployees, icon: Users, color: "text-primary" },
     { label: "Avg Sentiment", value: `${(manager.sentimentScore * 100).toFixed(0)}%`, icon: TrendingUp, color: "text-success" },
     { label: "Feedbacks", value: feedbacks.length, icon: MessageSquare, color: "text-accent" },
-    { label: "Effectiveness", value: `${manager.effectivenessScore}%`, icon: BarChart3, color: "text-primary" },
+    { label: "AI Score", value: `${manager.effectivenessScore}%`, icon: Sparkles, color: "text-primary shadow-sm" },
   ];
 
   const analysis = {
@@ -23,8 +46,9 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
     effectivenessScore: manager.effectivenessScore,
     sentimentLabel: manager.sentimentLabel,
     suggestions: [],
-    strengths: [],
+    strengths: manager.aiStrengths || [],
     feedbackText: "",
+    aiBreakdown: manager.aiBreakdown,
   };
 
   return (
@@ -57,7 +81,7 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
           color={manager.sentimentScore > 0.6 ? "success" : manager.sentimentScore < 0.4 ? "destructive" : "accent"}
         />
         <ScoreGauge
-          label="Effectiveness Score"
+          label="AI Effectiveness Score"
           value={manager.effectivenessScore}
           max={100}
           color="primary"
@@ -78,11 +102,130 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
         </motion.div>
       </div>
 
+      {/* ── AI Analysis Detailed Section ── */}
+      {(manager.aiReasoning || manager.aiBreakdown) && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="glass-card rounded-xl p-6 border border-primary/20"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-display text-lg font-semibold text-foreground">AI Performance Insights</h3>
+              <p className="text-xs text-muted-foreground">Detailed reasoning based on 12 data dimensions</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* Reasoning */}
+            {manager.aiReasoning && (
+              <div className="p-4 rounded-xl bg-secondary/20 border border-border/30">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Analysis Reasoning</p>
+                <p className="text-sm text-foreground/90 leading-relaxed font-medium">{manager.aiReasoning}</p>
+              </div>
+            )}
+
+            {/* Strengths & Weaknesses */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {manager.aiStrengths && manager.aiStrengths.length > 0 && (
+                <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <TrendingUp className="h-3 w-3" /> Core Strengths
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {manager.aiStrengths.map((s, i) => (
+                      <span key={i} className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 text-[10px] font-bold border border-emerald-500/20">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {manager.aiWeaknesses && manager.aiWeaknesses.length > 0 && (
+                <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20">
+                  <p className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <Brain className="h-3 w-3" /> Areas for Improvement
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {manager.aiWeaknesses.map((w, i) => (
+                      <span key={i} className="px-2.5 py-1 rounded-lg bg-red-500/10 text-red-700 text-[10px] font-bold border border-red-500/20">
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 12-Dimension Breakdown */}
+            {manager.aiBreakdown && (
+              <div>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Holistic Breakdown</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                  {Object.entries(manager.aiBreakdown).map(([key, value]) => (
+                    <div key={key} className="flex items-center gap-3">
+                      <span className="text-[11px] font-medium text-muted-foreground w-36 shrink-0 truncate">{breakdownLabels[key] || key}</span>
+                      <div className="flex-1 h-2 rounded-full bg-secondary/40 overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${value}%` }}
+                          transition={{ duration: 0.8, delay: 0.2 }}
+                          className={`h-full rounded-full ${getBarColor(value)}`}
+                        />
+                      </div>
+                      <span className="text-[11px] font-bold text-foreground w-8 text-right">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* Score Trend Timeline */}
-      <ScoreTrendChart
-        managerId={manager._id}
-        currentScore={manager.effectivenessScore}
-      />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ScoreTrendChart
+          managerId={manager._id}
+          currentScore={manager.effectivenessScore}
+        />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-card rounded-lg p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <h3 className="font-display text-lg font-semibold text-foreground">KPI Metrics Breakdown</h3>
+          </div>
+          <div className="space-y-4">
+            {metrics.map((m, i) => (
+              <div key={m._id} className="space-y-1.5">
+                <div className="flex justify-between text-xs font-medium">
+                  <span className="text-muted-foreground">{m.metricName}</span>
+                  <span className="text-foreground">{m.value}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${m.value}%` }}
+                    transition={{ duration: 0.8, delay: i * 0.1 }}
+                    className={`h-full rounded-full ${m.value >= 80 ? 'bg-success' : m.value >= 50 ? 'bg-primary' : 'bg-destructive'}`}
+                  />
+                </div>
+              </div>
+            ))}
+            {metrics.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8 italic">No specific KPI metrics available.</p>
+            )}
+          </div>
+        </motion.div>
+      </div>
 
       {/* Recent Feedbacks */}
       <motion.div
@@ -91,18 +234,21 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
         transition={{ delay: 0.3 }}
         className="glass-card rounded-lg p-6"
       >
-        <h3 className="font-display text-lg font-semibold text-foreground mb-4">Recent Feedbacks</h3>
+        <div className="flex items-center gap-3 mb-4">
+          <MessageSquare className="h-5 w-5 text-accent" />
+          <h3 className="font-display text-lg font-semibold text-foreground">Recent Team Feedback</h3>
+        </div>
         <div className="space-y-3">
           {feedbacks.slice(0, 8).map((fb) => (
             <div key={fb.id} className="group flex items-center justify-between gap-4 p-3.5 rounded-xl bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border/50 transition-all">
               <div className="flex items-center gap-4 flex-1 min-w-0">
-                <span className={`shrink-0 text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded-lg border ${fb.sentimentLabel === "Positive" ? "bg-success/10 text-success border-success/20"
-                  : fb.sentimentLabel === "Negative" ? "bg-destructive/10 text-destructive border-destructive/20"
-                    : "bg-accent/10 text-accent border-accent/20"
+                <span className={`shrink-0 text-[10px] font-bold uppercase tracking-tight px-2 py-1 rounded bg-secondary/50 border border-border/50 ${fb.sentimentLabel === "Positive" ? "text-success"
+                  : fb.sentimentLabel === "Negative" ? "text-destructive"
+                    : "text-accent"
                   }`}>
                   {fb.sentimentLabel}
                 </span>
-                <p className="text-sm text-foreground/90 font-medium truncate leading-none">
+                <p className="text-sm text-foreground/90 font-medium truncate">
                   {fb.text}
                 </p>
               </div>

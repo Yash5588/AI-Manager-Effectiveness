@@ -20,6 +20,7 @@ interface AnalysisData {
   suggestions: string[];
   strengths: string[];
   feedbackText: string;
+  aiBreakdown?: any;
 }
 
 interface AnalyticsChartsProps {
@@ -30,17 +31,17 @@ const AnalyticsCharts = ({ analysis }: AnalyticsChartsProps) => {
   const barData = [
     { name: "Sentiment", score: Math.round(analysis.sentimentScore * 100) },
     { name: "Effectiveness", score: analysis.effectivenessScore },
-    { name: "Communication", score: Math.min(100, Math.round(analysis.effectivenessScore * 0.9 + Math.random() * 10)) },
-    { name: "Leadership", score: Math.min(100, Math.round(analysis.sentimentScore * 80 + Math.random() * 15)) },
+    { name: "Team Growth", score: analysis.aiBreakdown?.employeeGrowth || analysis.aiBreakdown?.trainingDevelopment || 70 },
+    { name: "Reliability", score: analysis.aiBreakdown?.projectDelivery || analysis.aiBreakdown?.responsiveness || 75 },
   ];
 
   const radarData = [
-    { subject: "Communication", value: Math.round(analysis.sentimentScore * 90 + 5) },
-    { subject: "Vision", value: Math.round(analysis.effectivenessScore * 0.85) },
-    { subject: "Empathy", value: Math.round(analysis.sentimentScore * 80 + 10) },
-    { subject: "Delegation", value: Math.round(analysis.effectivenessScore * 0.7 + 15) },
-    { subject: "Feedback", value: Math.round(analysis.sentimentScore * 75 + 12) },
-    { subject: "Growth", value: Math.round(analysis.effectivenessScore * 0.8) },
+    { subject: "Communication", value: analysis.aiBreakdown?.oneOnOneQuality || analysis.aiBreakdown?.responsiveness || Math.round(analysis.sentimentScore * 90) },
+    { subject: "Execution", value: analysis.aiBreakdown?.projectDelivery || analysis.aiBreakdown?.goalCompletion || 70 },
+    { subject: "Empathy", value: analysis.aiBreakdown?.feedbackSentiment || analysis.aiBreakdown?.engagement || Math.round(analysis.sentimentScore * 80) },
+    { subject: "Development", value: analysis.aiBreakdown?.employeeGrowth || analysis.aiBreakdown?.trainingDevelopment || 65 },
+    { subject: "Retention", value: analysis.aiBreakdown?.teamRetention || 80 },
+    { subject: "Performance", value: analysis.aiBreakdown?.employeePerformance || analysis.aiBreakdown?.kpiMetrics || 75 },
   ];
 
   return (
