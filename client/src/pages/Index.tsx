@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Lightbulb, UserCheck, Loader2, ChevronDown, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Lightbulb, UserCheck, Loader2, ChevronDown, LogOut, UserMinus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OverviewTab from "@/components/tabs/OverviewTab";
 import EmployeesTab from "@/components/tabs/EmployeesTab";
 import SuggestionsTab from "@/components/tabs/SuggestionsTab";
 import EmployeeSuggestionsTab from "@/components/tabs/EmployeeSuggestionsTab";
+import AttritionRiskTab from "@/components/tabs/AttritionRiskTab";
 import {
   fetchManager,
   fetchEmployees,
@@ -14,12 +15,14 @@ import {
   fetchMetrics,
   fetchAISuggestions,
   fetchEmployeeSuggestions,
+  fetchAttritionPredictions,
   type Manager,
   type Employee,
   type Feedback,
   type Metric,
   type AISuggestion,
   type EmployeeSuggestion,
+  type AttritionPrediction,
 } from "@/lib/api";
 import {
   DropdownMenu,
@@ -40,6 +43,8 @@ const Index = () => {
   const [sugsLoading, setSugsLoading] = useState(false);
   const [employeeSuggestions, setEmployeeSuggestions] = useState<EmployeeSuggestion[]>([]);
   const [empSugLoading, setEmpSugLoading] = useState(false);
+  const [attritionPredictions, setAttritionPredictions] = useState<AttritionPrediction[]>([]);
+  const [attritionLoading, setAttritionLoading] = useState(false);
   const [metrics, setMetrics] = useState<Metric[]>([]);
 
   // 1. Load data for the logged in manager
@@ -53,6 +58,7 @@ const Index = () => {
     setLoading(true);
     setEmployeeSuggestions([]);
     setSuggestions([]);
+    setAttritionPredictions([]);
     try {
       const mgr = await fetchManager(managerId);
       setManager(mgr);
@@ -111,6 +117,19 @@ const Index = () => {
     }
   };
 
+  const handleGenerateAttrition = async () => {
+    if (!manager) return;
+    setAttritionLoading(true);
+    try {
+      const result = await fetchAttritionPredictions(manager.id);
+      setAttritionPredictions(result);
+    } catch (e) {
+      console.error("Failed to generate attrition risk:", e);
+    } finally {
+      setAttritionLoading(false);
+    }
+  };
+
   if (loading && !manager) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -124,6 +143,7 @@ const Index = () => {
     { id: "employees", label: "Employees", icon: Users },
     { id: "suggestions", label: "AI Suggestions", icon: Lightbulb },
     { id: "employee-suggestions", label: "Employee Coaching", icon: UserCheck },
+    { id: "attrition", label: "Attrition Risk", icon: UserMinus },
   ];
 
   return (
@@ -208,6 +228,13 @@ const Index = () => {
                 currentScore={manager.effectivenessScore}
                 loading={empSugLoading}
                 onGenerate={handleGenerateEmployeeSuggestions}
+              />
+            </TabsContent>
+            <TabsContent value="attrition">
+              <AttritionRiskTab
+                predictions={attritionPredictions}
+                loading={attritionLoading}
+                onGenerate={handleGenerateAttrition}
               />
             </TabsContent>
           </Tabs>

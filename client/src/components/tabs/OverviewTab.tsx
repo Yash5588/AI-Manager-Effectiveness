@@ -287,7 +287,7 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
                 </div>
               </div>
               <p className="text-sm text-foreground/90 font-medium line-clamp-2 italic">
-                "{fb.text}"
+                "{fb.comment}"
               </p>
             </div>
           ))}

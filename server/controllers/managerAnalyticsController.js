@@ -6,6 +6,7 @@ const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { generateAISuggestions, generateEmployeeSuggestions } = require("../services/aiSuggestionsService");
 const { computeAIScore } = require("../services/aiScoringService");
+const { predictTeamAttrition } = require("../services/attritionService");
 
 // ── Feedback query limits ──
 const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
@@ -480,6 +481,47 @@ exports.getAIScore = async (req, res) => {
   } catch (error) {
     console.error("AI Score error:", error);
     const msg = error.message || "Failed to compute AI score";
+    const status =
+      msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
+    res.status(status).json({ message: msg });
+  }
+};
+
+/**
+ * POST /api/manager-analytics/:managerId/attrition-risk
+ * Predicts attrition and impact for each employee in the team.
+ */
+exports.getAttritionPredictions = async (req, res) => {
+  try {
+    const { managerId } = req.params;
+
+    const manager = await Manager.findById(managerId);
+    if (!manager) {
+      return res.status(404).json({ message: "Manager not found" });
+    }
+
+    const [employees, feedbacks, metrics, extendedMetrics] = await Promise.all([
+      Employee.find({ managerId }),
+      Feedback.find({ managerId, ...getFeedbackDateFilter() })
+        .sort({ createdAt: -1 })
+        .limit(FEEDBACK_SCORE_LIMIT),
+      PerformanceMetric.find({ managerId }),
+      ManagerExtendedMetrics.findOne({ managerId }),
+    ]);
+
+    const payload = {
+      manager: manager.toObject ? manager.toObject() : manager,
+      employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
+      feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map((f) => (f.toObject ? f.toObject() : f)),
+      metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
+      extendedMetrics: extendedMetrics ? (extendedMetrics.toObject ? extendedMetrics.toObject() : extendedMetrics) : {},
+    };
+
+    const predictions = await predictTeamAttrition(payload);
+    res.json({ predictions });
+  } catch (error) {
+    console.error("Attrition prediction error:", error);
+    const msg = error.message || "Failed to predict attrition";
     const status =
       msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
     res.status(status).json({ message: msg });

@@ -19,10 +19,12 @@ import {
     Building2,
     User,
     Sparkles,
+    UserMinus,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import ScoreGauge from "@/components/ScoreGauge";
 import ScoreTrendChart from "@/components/ScoreTrendChart";
 import {
@@ -33,6 +35,7 @@ import {
     fetchAISuggestions,
     fetchEmployees,
     fetchFeedbacks,
+    fetchAttritionPredictions,
     type HROverview,
     type HRManager,
     type HierarchyData,
@@ -40,7 +43,9 @@ import {
     type AISuggestion,
     type Employee,
     type Feedback,
+    type AttritionPrediction,
 } from "@/lib/api";
+import AttritionRiskTab from "@/components/tabs/AttritionRiskTab";
 
 // ─── Helper components ───
 
@@ -99,6 +104,8 @@ const HRDashboard = () => {
     const [selectedManager, setSelectedManager] = useState<string | null>(null);
     const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
     const [sugsLoading, setSugsLoading] = useState(false);
+    const [attritionPredictions, setAttritionPredictions] = useState<AttritionPrediction[]>([]);
+    const [attritionLoading, setAttritionLoading] = useState(false);
 
     // Deep dive data
     const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
@@ -147,6 +154,7 @@ const HRDashboard = () => {
             setSelectedFeedbacks(fbs);
             // Reset suggestions when switching managers
             setSuggestions([]);
+            setAttritionPredictions([]);
         } catch (e) {
             console.error("Failed to load manager details:", e);
         } finally {
@@ -166,6 +174,18 @@ const HRDashboard = () => {
         }
     };
 
+    const handleGenerateAttrition = async (managerId: string) => {
+        setAttritionLoading(true);
+        try {
+            const predictions = await fetchAttritionPredictions(managerId);
+            setAttritionPredictions(predictions);
+        } catch (e) {
+            console.error("Failed to generate attrition risk:", e);
+        } finally {
+            setAttritionLoading(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -180,6 +200,7 @@ const HRDashboard = () => {
         { id: "hierarchy", label: "Org Chart", icon: Network },
         { id: "leaderboard", label: "Leaderboard", icon: Trophy },
         { id: "suggestions", label: "AI Suggestions", icon: Lightbulb },
+        { id: "attrition", label: "Attrition Risk", icon: UserMinus },
     ];
 
     const selectedMgr = managers.find(m => m._id === selectedManager);
@@ -446,7 +467,7 @@ const HRDashboard = () => {
                                                     <div key={fb._id} className="p-3 rounded-lg bg-secondary/30 border border-border/50">
                                                         <div className="flex items-center justify-between mb-1.5">
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-bold text-muted-foreground">{fb.employeeName}</span>
+                                                                <span className="text-[10px] font-bold text-muted-foreground">{fb.fromEmployee}</span>
                                                                 {fb.pulseMood && (
                                                                     <span className="text-xs">
                                                                         {fb.pulseMood === "thriving" ? "🔥" : fb.pulseMood === "happy" ? "😊" : fb.pulseMood === "neutral" ? "😐" : fb.pulseMood === "stressed" ? "😓" : "😞"}
@@ -469,7 +490,7 @@ const HRDashboard = () => {
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground italic leading-relaxed">"{fb.text}"</p>
+                                                        <p className="text-xs text-muted-foreground italic leading-relaxed">"{fb.comment}"</p>
                                                     </div>
                                                 ))
                                             ) : (
@@ -856,6 +877,56 @@ const HRDashboard = () => {
                                     </p>
                                 </div>
                             )}
+                        </div>
+                    </TabsContent>
+
+                    {/* ══════════════ ATTRITION RISK TAB ══════════════ */}
+                    <TabsContent value="attrition">
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between flex-wrap gap-3">
+                                <div>
+                                    <h3 className="font-display text-lg font-semibold text-foreground">
+                                        Attrition Risk Analysis
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Identify flight risks and impact in {selectedMgr?.name}'s team
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <select
+                                        value={selectedManager || ""}
+                                        onChange={(e) => {
+                                            const id = e.target.value;
+                                            setSelectedManager(id);
+                                            loadManagerDetails(id);
+                                            setAttritionPredictions([]);
+                                        }}
+                                        className="px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    >
+                                        {managers.map(m => (
+                                            <option key={m._id} value={m._id}>{m.name}</option>
+                                        ))}
+                                    </select>
+                                    <Button
+                                        onClick={() => selectedManager && handleGenerateAttrition(selectedManager)}
+                                        disabled={attritionLoading || !selectedManager}
+                                        className="gradient-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
+                                    >
+                                        {attritionLoading ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Sparkles className="h-4 w-4" />
+                                        )}
+                                        {attritionLoading ? "Analyzing..." : "Run Prediction"}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <AttritionRiskTab
+                                predictions={attritionPredictions}
+                                loading={attritionLoading}
+                                onGenerate={() => selectedManager && handleGenerateAttrition(selectedManager)}
+                            />
                         </div>
                     </TabsContent>
                 </Tabs>

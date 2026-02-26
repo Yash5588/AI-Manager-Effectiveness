@@ -81,13 +81,16 @@ export interface Manager {
 export interface Feedback {
   _id: string;
   id: string;
-  employeeId?: string;
-  employeeName: string;
+  fromEmployee: string;
+  employeeId: string;
   managerId: string;
-  text: string;
+  comment: string;
   sentimentScore: number;
   sentimentLabel: "Positive" | "Neutral" | "Negative";
   date: string;
+  pulseMood?: string;
+  feedbackCategory?: string;
+  feedbackType?: string;
   compositeFeedbackScore?: number;
   ratings?: {
     communication?: number;
@@ -100,9 +103,6 @@ export interface Feedback {
     conflictResolution?: number;
   };
   npsScore?: number;
-  pulseMood?: string;
-  feedbackType?: string;
-  feedbackCategory?: string;
 }
 
 export interface AISuggestion {
@@ -127,6 +127,16 @@ export interface EmployeeSuggestion {
   suggestions: EmployeeSuggestionItem[];
   predictedManagerScore: number;
   rationale: string;
+}
+
+export interface AttritionPrediction {
+  employeeName: string;
+  flightRisk: number; // 0-100
+  impactScore: number; // 0-100
+  riskLevel: "High" | "Medium" | "Low";
+  impactLevel: "High" | "Medium" | "Low";
+  rationale: string;
+  recommendation: string;
 }
 
 export interface ScoreSnapshot {
@@ -239,9 +249,9 @@ export async function fetchFeedbacks(managerId: string, page: number = 1, limit:
   return feedbackList.map((f: any) => ({
     _id: f._id,
     id: f._id,
-    employeeName: f.fromEmployee,
+    fromEmployee: f.fromEmployee,
     managerId: f.managerId,
-    text: f.comment,
+    comment: f.comment,
     sentimentScore: f.sentimentScore,
     sentimentLabel: getSentimentLabel(f.sentimentScore),
     date: f.createdAt,
@@ -277,6 +287,13 @@ export async function fetchEmployeeSuggestions(
     employeeSuggestions: res.data.employeeSuggestions || [],
     currentScore: res.data.currentScore || 0,
   };
+}
+
+export async function fetchAttritionPredictions(
+  managerId: string
+): Promise<AttritionPrediction[]> {
+  const res = await api.post(`/manager-analytics/${managerId}/attrition-risk`);
+  return res.data.predictions || [];
 }
 
 // ========== AI-ENHANCED SCORE ==========
