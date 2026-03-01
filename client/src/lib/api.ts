@@ -296,25 +296,6 @@ export async function fetchAttritionPredictions(
   return res.data.predictions || [];
 }
 
-// ========== AI-ENHANCED SCORE ==========
-
-
-
-export interface AIScoreResult {
-  cached: boolean;
-  aiScore: number;
-  aiBreakdown: AIScoreBreakdown;
-  aiReasoning: string;
-  aiStrengths: string[];
-  aiWeaknesses: string[];
-  formulaScore: number;
-  cachedAt?: string;
-}
-
-export async function fetchAIScore(managerId: string): Promise<AIScoreResult> {
-  const res = await api.get(`/manager-analytics/${managerId}/ai-score`);
-  return res.data;
-}
 
 export default api;
 

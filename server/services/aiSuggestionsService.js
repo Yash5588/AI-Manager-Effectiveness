@@ -1,8 +1,6 @@
 const OpenAI = require("openai").default;
 
-/* ───────────────────────────────────────────────
-   Create ONE OpenRouter client (GLOBAL)
-   ─────────────────────────────────────────────── */
+// OpenRouter client
 const openRouterClient = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
@@ -12,15 +10,11 @@ const openRouterClient = new OpenAI({
   },
 });
 
-/* ───────────────────────────────────────────────
-   Rate-limit guard (prevents Cloudflare ban)
-   ─────────────────────────────────────────────── */
+// Rate-limit guard
 let lastCallTime = 0;
 const MIN_DELAY_MS = 1500;
 
-/* ───────────────────────────────────────────────
-   Safe JSON array parser
-   ─────────────────────────────────────────────── */
+// Parse JSON array from AI response
 function safeParseJSONArray(text) {
   try {
     if (!text) return null;
@@ -42,15 +36,13 @@ function safeParseJSONArray(text) {
   }
 }
 
-/* ───────────────────────────────────────────────
-   Main AI suggestion generator
-   ─────────────────────────────────────────────── */
+// Generate AI suggestions for a manager
 async function generateAISuggestions(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing");
   }
 
-  // ⏱ Rate limit protection
+  // Rate limit
   const now = Date.now();
   if (now - lastCallTime < MIN_DELAY_MS) {
     const wait = MIN_DELAY_MS - (now - lastCallTime);
@@ -152,9 +144,7 @@ Metrics:
 ${metricsSummary}
 `.trim();
 
-  /* ───────────────────────────────────────────────
-     Model fallback logic (IMPORTANT)
-     ─────────────────────────────────────────────── */
+  // Model fallback chain
   const models = [
     "deepseek/deepseek-chat",
     "deepseek/deepseek-r1",
@@ -180,14 +170,13 @@ ${metricsSummary}
       const parsed = safeParseJSONArray(content);
 
       if (parsed) {
-        // 🛡️ Post-processing: Ensure strictly increasing scores
+        // Ensure strictly increasing scores
         return parsed.map((s) => {
           const current = finalScore ?? 0;
           let predicted = Number(s.predictedScore);
 
-          // If AI hallucinated a lower score or invalid number, fix it
+          // Fix invalid or lower scores
           if (isNaN(predicted) || predicted <= current) {
-            // Add a realistic boost if the AI failed to provide a valid one
             predicted = Math.min(100, current + Math.floor(Math.random() * 8) + 4);
           }
 
@@ -217,15 +206,13 @@ ${metricsSummary}
   throw new Error(msg);
 }
 
-/* ───────────────────────────────────────────────
-  Per-Employee Suggestion Generator
-   ─────────────────────────────────────────────── */
+// Generate per-employee suggestions
 async function generateEmployeeSuggestions(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing");
   }
 
-  // ⏱ Rate limit protection
+  // Rate limit
   const now = Date.now();
   if (now - lastCallTime < MIN_DELAY_MS) {
     await new Promise((r) => setTimeout(r, MIN_DELAY_MS - (now - lastCallTime)));
@@ -255,7 +242,7 @@ async function generateEmployeeSuggestions(payload) {
       ? metrics.map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}`).join("\n")
       : "No metrics on record.";
 
-  // Build per-employee detail blocks
+  // Per-employee details
   const employeeDetails = employees
     .map((emp) => {
       const empFeedbacks = feedbacks.filter(
@@ -326,7 +313,7 @@ Employee Details:
 ${employeeDetails}
 `.trim();
 
-  /* ─── Model fallback logic ──── */
+  // Model fallback chain
   const models = [
     "deepseek/deepseek-chat",
     "deepseek/deepseek-r1",
@@ -351,7 +338,7 @@ ${employeeDetails}
       const parsed = safeParseJSONArray(content);
 
       if (parsed) {
-        // 🛡️ Post-processing: ensure valid predicted scores
+        // Ensure valid predicted scores
         return parsed.map((emp) => {
           const current = finalScore ?? 0;
           let predicted = Number(emp.predictedManagerScore);
@@ -389,15 +376,13 @@ ${employeeDetails}
   throw new Error(msg);
 }
 
-/* ───────────────────────────────────────────────
-   Sentiment Analysis for Feedback
-   ─────────────────────────────────────────────── */
+// Analyze feedback sentiment
 async function analyzeSentiment(comment) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing");
   }
 
-  // ⏱ Rate limit protection
+  // Rate limit
   const now = Date.now();
   if (now - lastCallTime < MIN_DELAY_MS) {
     const wait = MIN_DELAY_MS - (now - lastCallTime);
@@ -442,7 +427,7 @@ Feedback: "${comment}"
           .replace(/```/g, "")
           .trim();
 
-        // Try to parse JSON object
+        // Parse JSON
         const jsonStart = cleaned.indexOf("{");
         const jsonEnd = cleaned.lastIndexOf("}");
         if (jsonStart !== -1 && jsonEnd !== -1) {
@@ -453,7 +438,7 @@ Feedback: "${comment}"
           }
         }
 
-        // Fallback: try extracting a number directly
+        // Fallback: extract number directly
         const numMatch = cleaned.match(/0?\.\d+/);
         if (numMatch) {
           const score = Number(numMatch[0]);
@@ -466,7 +451,7 @@ Feedback: "${comment}"
     }
   }
 
-  // If all models fail, return a neutral score
+  // Default to neutral if all models fail
   console.warn("⚠️ All sentiment models failed, defaulting to 0.5");
   return 0.5;
 }

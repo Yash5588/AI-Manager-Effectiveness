@@ -10,7 +10,7 @@ const ManagerExtendedMetrics = require("./models/ManagerExtendedMetrics");
 
 dotenv.config();
 
-// ── Helpers for snapshot generation ──
+// Helpers for snapshot generation
 function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
 }
@@ -23,7 +23,7 @@ const seedData = async () => {
         await mongoose.connect(process.env.MONGO_URI);
         console.log("Connected to MongoDB...");
 
-        // Clear ALL data
+        // Clear all data
         await Promise.all([
             HR.deleteMany({}),
             Manager.deleteMany({}),
@@ -35,9 +35,7 @@ const seedData = async () => {
         ]);
         console.log("Cleared all existing data.\n");
 
-        // ==========================================
-        //  HR USERS
-        // ==========================================
+        // === HR Users ===
         const hr1 = await HR.create({
             name: "Priya Sharma",
             email: "priya.sharma@company.com",
@@ -56,11 +54,9 @@ const seedData = async () => {
         });
         console.log(`✅ Created HR 2: ${hr2.name} (${hr2.email})\n`);
 
-        // ==========================================
-        //  HR 1's MANAGERS (existing 3)
-        // ==========================================
+        // === HR 1's Managers ===
 
-        // ── Manager 1: Neutral (Operations) ──
+        // Manager 1: Neutral (Operations)
         const neutralManager = await Manager.create({
             name: "Jordan Lee",
             email: "jordan.lee@company.com",
@@ -104,7 +100,7 @@ const seedData = async () => {
             trainingInvestment: 35,
         });
 
-        // ── Manager 2: Negative (Sales) ──
+        // Manager 2: Negative (Sales)
         const negativeManager = await Manager.create({
             name: "Alex Morgan",
             email: "alex.morgan@company.com",
@@ -146,7 +142,7 @@ const seedData = async () => {
             trainingInvestment: 15,
         });
 
-        // ── Manager 3: Positive (Product) ──
+        // Manager 3: Positive (Product)
         const positiveManager = await Manager.create({
             name: "Diana Prince",
             email: "diana.prince@company.com",
@@ -187,12 +183,9 @@ const seedData = async () => {
             trainingInvestment: 80,
         });
 
-        // ==========================================
+        // === HR 2's Managers ===
 
-        //  HR 2's MANAGERS (3 new ones)
-        // ==========================================
-
-        // ── Manager 4: Strong (Engineering) ──
+        // Manager 4: Strong (Engineering)
         const engManager = await Manager.create({
             name: "Vikram Desai",
             email: "vikram.desai@company.com",
@@ -237,7 +230,7 @@ const seedData = async () => {
             trainingInvestment: 72,
         });
 
-        // ── Manager 5: Mixed (Marketing) ──
+        // Manager 5: Mixed (Marketing)
         const mktManager = await Manager.create({
             name: "Sneha Kapoor",
             email: "sneha.kapoor@company.com",
@@ -279,7 +272,7 @@ const seedData = async () => {
             trainingInvestment: 30,
         });
 
-        // ── Manager 6: Low (Customer Support) ──
+        // Manager 6: Low (Customer Support)
         const csManager = await Manager.create({
             name: "Amit Gupta",
             email: "amit.gupta@company.com",
@@ -323,9 +316,7 @@ const seedData = async () => {
             trainingInvestment: 20,
         });
 
-        // ==========================================
-        //  SCORE SNAPSHOTS (30 days for all 6 managers)
-        // ==========================================
+        // === Score Snapshots (30 days for all 6 managers) ===
         console.log("📈 Generating 30-day score snapshots...");
 
         const allManagers = [
@@ -375,9 +366,7 @@ const seedData = async () => {
             console.log(`  📊 ${mgr.name}: ${snapshots.length} snapshots (${Math.min(...scores)} → ${Math.max(...scores)})`);
         }
 
-        // ==========================================
-        //  SUMMARY
-        // ==========================================
+        // === Summary ===
         console.log("\n============================================");
         console.log("✅ Done seeding!");
         console.log("============================================");

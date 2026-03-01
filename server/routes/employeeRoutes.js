@@ -12,6 +12,7 @@ router.post("/", async (req, res) => {
 // GET employees by manager (includes feedback given by each employee)
 router.get("/manager/:managerId", async (req, res) => {
   const { managerId } = req.params;
+  //for faster and lighter response
   const employees = await Employee.find({ managerId }).lean();
   const feedbacks = await Feedback.find({ managerId }).lean();
 

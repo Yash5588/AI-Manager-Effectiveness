@@ -5,10 +5,7 @@ const Employee = require("../models/Employee");
 const HR = require("../models/HR");
 const { generateToken } = require("../middleware/auth");
 
-/**
- * POST /api/auth/login
- * Body: { email, password, role: "manager" | "employee" }
- */
+// POST /api/auth/login
 router.post("/login", async (req, res) => {
     try {
         const { email, password, role } = req.body;
@@ -113,39 +110,6 @@ router.post("/login", async (req, res) => {
         return res.status(400).json({ message: "Invalid role. Must be 'manager', 'employee', or 'hr'" });
     } catch (error) {
         console.error("Login error:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-});
-
-/**
- * GET /api/auth/me
- * Returns the current user's profile based on JWT
- */
-const { authMiddleware } = require("../middleware/auth");
-
-router.get("/me", authMiddleware, async (req, res) => {
-    try {
-        if (req.user.role === "manager") {
-            const manager = await Manager.findById(req.user.id).select("-password");
-            if (!manager) return res.status(404).json({ message: "Manager not found" });
-            return res.json({ ...manager.toObject(), role: "manager" });
-        }
-
-        if (req.user.role === "employee") {
-            const employee = await Employee.findById(req.user.id).select("-password");
-            if (!employee) return res.status(404).json({ message: "Employee not found" });
-            return res.json({ ...employee.toObject(), role: "employee" });
-        }
-
-        if (req.user.role === "hr") {
-            const hr = await HR.findById(req.user.id).select("-password");
-            if (!hr) return res.status(404).json({ message: "HR not found" });
-            return res.json({ ...hr.toObject(), role: "hr" });
-        }
-
-        res.status(400).json({ message: "Unknown role" });
-    } catch (error) {
-        console.error("Auth /me error:", error);
         res.status(500).json({ message: "Server error" });
     }
 });

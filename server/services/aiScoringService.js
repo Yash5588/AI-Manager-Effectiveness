@@ -1,8 +1,6 @@
 const OpenAI = require("openai").default;
 
-/* ───────────────────────────────────────────────
-   Create ONE OpenRouter client (GLOBAL)
-   ─────────────────────────────────────────────── */
+// OpenRouter client
 const openRouterClient = new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY,
     baseURL: "https://openrouter.ai/api/v1",
@@ -12,15 +10,11 @@ const openRouterClient = new OpenAI({
     },
 });
 
-/* ───────────────────────────────────────────────
-   Rate-limit guard (prevents Cloudflare ban)
-   ─────────────────────────────────────────────── */
+// Rate-limit guard
 let lastCallTime = 0;
 const MIN_DELAY_MS = 1500;
 
-/* ───────────────────────────────────────────────
-   Safe JSON object parser
-   ─────────────────────────────────────────────── */
+// Parse JSON object from AI response
 function safeParseJSONObject(text) {
     try {
         if (!text) return null;
@@ -42,15 +36,13 @@ function safeParseJSONObject(text) {
     }
 }
 
-/* ───────────────────────────────────────────────
-   Compute AI-enhanced Effectiveness Score
-   ─────────────────────────────────────────────── */
+// Compute AI effectiveness score
 async function computeAIScore(payload) {
     if (!process.env.OPENROUTER_API_KEY) {
         throw new Error("OPENROUTER_API_KEY is missing");
     }
 
-    // ⏱ Rate limit protection
+    // Rate limit
     const now = Date.now();
     if (now - lastCallTime < MIN_DELAY_MS) {
         const wait = MIN_DELAY_MS - (now - lastCallTime);
@@ -73,7 +65,7 @@ async function computeAIScore(payload) {
         throw new Error("Manager data is required for AI scoring");
     }
 
-    // ── Build data summaries for the prompt ──
+    // Build data summaries for prompt
     const employeePct = Math.round((breakdown.avgEmployeeScore ?? 0.5) * 100);
     const feedbackPct = Math.round((breakdown.avgFeedbackScore ?? 0.5) * 100);
     const metricsPct = Math.round((breakdown.avgMetricScore ?? 0.5) * 100);
@@ -118,7 +110,7 @@ async function computeAIScore(payload) {
             ? metrics.map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}/100`).join("\n")
             : "No metrics on record.";
 
-    // ── Extended metrics summary ──
+    // Extended metrics summary
     const extMetrics = extendedMetrics || {};
     const extendedSummary = `
 - Team Retention Rate: ${extMetrics.teamRetentionRate ?? "N/A"}/100
@@ -195,7 +187,7 @@ Supplementary Metrics:
 ${extendedSummary}
 `.trim();
 
-    /* ─── Model fallback logic ─── */
+    // Model fallback chain
     const models = [
         "deepseek/deepseek-chat",
         "deepseek/deepseek-r1",
@@ -221,10 +213,10 @@ ${extendedSummary}
             const parsed = safeParseJSONObject(content);
 
             if (parsed && typeof parsed.overallScore === "number") {
-                // 🛡️ Post-processing: Clamp score and validate
+                // Clamp and validate score
                 const score = Math.max(0, Math.min(100, Math.round(parsed.overallScore)));
 
-                // Ensure breakdown values are valid
+                // Validate breakdown values
                 const breakdown = {};
                 if (parsed.breakdown && typeof parsed.breakdown === "object") {
                     for (const [key, val] of Object.entries(parsed.breakdown)) {

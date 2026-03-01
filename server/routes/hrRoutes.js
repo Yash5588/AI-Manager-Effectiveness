@@ -8,9 +8,7 @@ const PerformanceMetric = require("../models/PerformanceMetric");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
 const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 
-/**
- * Helper: compute a manager's analytics inline
- */
+// Compute a manager's analytics
 function normalizeEmployeeScore(rating) {
     return (rating - 1) / 4;
 }
@@ -24,7 +22,7 @@ function getPerformanceCategory(score) {
     return "Needs Improvement";
 }
 
-// ── Feedback query limits (same as analytics controller) ──
+// Feedback query limits (same as analytics controller)
 const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
 const FEEDBACK_SCORE_LIMIT = 50;
 
@@ -68,10 +66,10 @@ async function computeManagerAnalytics(managerId) {
     if (latestSnapshot) {
         finalScore = latestSnapshot.aiScore;
         if (latestSnapshot.aiBreakdown) {
-            // Include AI breakdown if available, but keep primary 3 for UI compatibility where needed
+            // Use AI breakdown if available
             breakdown = { ...breakdown, ...latestSnapshot.aiBreakdown };
 
-            // Sync AI feedback sentiment (0-100) with avgFeedbackScore (0-1) for compatibility
+            // Sync AI feedback sentiment with avgFeedbackScore
             if (latestSnapshot.aiBreakdown.feedbackSentiment !== undefined) {
                 breakdown.avgFeedbackScore = latestSnapshot.aiBreakdown.feedbackSentiment / 100;
             }
@@ -98,10 +96,7 @@ async function computeManagerAnalytics(managerId) {
     };
 }
 
-/**
- * GET /api/hr/:hrId/managers
- * Returns all managers assigned to this HR with their analytics
- */
+// GET /api/hr/:hrId/managers — returns all managers assigned to this HR with analytics
 router.get("/:hrId/managers", async (req, res) => {
     try {
         const { hrId } = req.params;
@@ -140,10 +135,7 @@ router.get("/:hrId/managers", async (req, res) => {
     }
 });
 
-/**
- * GET /api/hr/:hrId/overview
- * Returns aggregate overview stats for all managers under this HR
- */
+// GET /api/hr/:hrId/overview — returns aggregate stats for all managers under this HR
 router.get("/:hrId/overview", async (req, res) => {
     try {
         const { hrId } = req.params;
@@ -198,10 +190,7 @@ router.get("/:hrId/overview", async (req, res) => {
     }
 });
 
-/**
- * GET /api/hr/:hrId/hierarchy
- * Returns the full org hierarchy: HR → Managers → Employees
- */
+// GET /api/hr/:hrId/hierarchy — returns full org hierarchy: HR → Managers → Employees
 router.get("/:hrId/hierarchy", async (req, res) => {
     try {
         const { hrId } = req.params;
@@ -251,10 +240,7 @@ router.get("/:hrId/hierarchy", async (req, res) => {
     }
 });
 
-/**
- * GET /api/hr/:hrId/leaderboard
- * Returns managers ranked by effectiveness and sentiment
- */
+// GET /api/hr/:hrId/leaderboard — returns managers ranked by effectiveness and sentiment
 router.get("/:hrId/leaderboard", async (req, res) => {
     try {
         const { hrId } = req.params;

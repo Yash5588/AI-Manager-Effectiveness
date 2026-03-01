@@ -25,9 +25,7 @@ function safeParseJSONObject(text) {
     }
 }
 
-/**
- * Predict Attrition Risk and Impact for a team
- */
+// Predict attrition risk for a team
 async function predictTeamAttrition(payload) {
     if (!process.env.OPENROUTER_API_KEY) {
         throw new Error("OPENROUTER_API_KEY is missing");
@@ -35,7 +33,7 @@ async function predictTeamAttrition(payload) {
 
     const { manager, employees, feedbacks, metrics, extendedMetrics } = payload;
 
-    // Build the prompt for AI to analyze the team
+    // Build prompt
     const prompt = `
 You are an expert HR Data Scientist and Talent Strategist. 
 Analyze the following team data and predict:
@@ -96,7 +94,7 @@ Scoring Guidelines:
     let lastError = null;
     for (const model of models) {
         try {
-            // Rate limit protection
+            // Rate limit
             const now = Date.now();
             if (now - lastCallTime < MIN_DELAY_MS) {
                 await new Promise(r => setTimeout(r, MIN_DELAY_MS - (now - lastCallTime)));

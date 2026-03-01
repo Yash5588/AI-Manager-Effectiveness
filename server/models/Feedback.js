@@ -18,10 +18,10 @@ const FeedbackSchema = new mongoose.Schema(
       type: Number,
       min: 0,
       max: 1
-      // Not required — will be calculated by AI on submission
+      // Calculated by AI on submission
     },
 
-    // ── Structured Rating Dimensions (1-5 stars) ──
+    // Rating dimensions (1-5)
     ratings: {
       communication: { type: Number, min: 1, max: 5 },
       recognition: { type: Number, min: 1, max: 5 },
@@ -33,14 +33,14 @@ const FeedbackSchema = new mongoose.Schema(
       conflictResolution: { type: Number, min: 1, max: 5 },
     },
 
-    // ── NPS Score (0-10) ──
+    // NPS (0-10)
     npsScore: {
       type: Number,
       min: 0,
       max: 10
     },
 
-    // ── Feedback Metadata ──
+    // Feedback metadata
     feedbackCategory: {
       type: String,
       enum: ["communication", "leadership", "technical", "culture", "growth", "worklife", "other"]
@@ -50,13 +50,13 @@ const FeedbackSchema = new mongoose.Schema(
       enum: ["appreciation", "suggestion", "concern"]
     },
 
-    // ── Pulse Mood (emoji-based quick mood check) ──
+    // Pulse mood
     pulseMood: {
       type: String,
       enum: ["thriving", "happy", "neutral", "stressed", "struggling"]
     },
 
-    // ── Behavioral / Frequency Questions ──
+    // Behavioral / frequency questions
     oneOnOneFrequency: {
       type: String,
       enum: ["weekly", "biweekly", "monthly", "rarely", "never"]
@@ -70,31 +70,31 @@ const FeedbackSchema = new mongoose.Schema(
       enum: ["same_day", "within_week", "within_month", "rarely", "never"]
     },
 
-    // ── Peer Comparison ──
+    // Peer comparison
     peerComparison: {
       type: String,
       enum: ["much_better", "better", "same", "worse", "much_worse"]
     },
 
-    // ── Time Period Context ──
+    // Time period context
     timePeriod: {
       type: String,
       enum: ["last_week", "last_month", "last_quarter", "overall"]
     },
 
-    // ── Follow-up Willingness ──
+    // Follow-up willingness
     willingToFollowUp: {
       type: Boolean,
       default: false
     },
 
-    // ── Urgency Level ──
+    // Urgency level
     urgency: {
       type: String,
       enum: ["low", "medium", "high"]
     },
 
-    // ── Composite Feedback Score (computed at submission) ──
+    // Composite score (computed at submission)
     compositeFeedbackScore: {
       type: Number,
       min: 0,

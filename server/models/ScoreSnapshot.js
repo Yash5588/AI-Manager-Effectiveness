@@ -25,7 +25,7 @@ const ScoreSnapshotSchema = new mongoose.Schema(
             feedbacks: { type: Number, default: 0 },
             metrics: { type: Number, default: 0 },
         },
-        // ── AI-enhanced score fields (cached from LLM) ──
+        // AI score fields (cached from LLM)
         aiScore: {
             type: Number,
             min: 0,
@@ -47,7 +47,7 @@ const ScoreSnapshotSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Compound index for efficient queries: get a manager's history sorted by date
+// Index for efficient manager score history queries
 ScoreSnapshotSchema.index({ managerId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("ScoreSnapshot", ScoreSnapshotSchema);

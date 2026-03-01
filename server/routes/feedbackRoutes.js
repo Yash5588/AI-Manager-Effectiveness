@@ -7,21 +7,18 @@ const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { authMiddleware, requireRole } = require("../middleware/auth");
 const { analyzeSentiment } = require("../services/aiSuggestionsService");
 
-/**
- * Compute composite feedback score from all available signals.
- * Returns a value between 0 and 1.
- */
+// Compute composite feedback score (returns 0-1)
 function computeCompositeFeedbackScore(feedback) {
   let totalWeight = 0;
   let weightedSum = 0;
 
-  // 1. Text Sentiment Score (weight: 0.30)
+  // Text sentiment (weight: 0.30)
   if (feedback.sentimentScore != null) {
     weightedSum += feedback.sentimentScore * 0.30;
     totalWeight += 0.30;
   }
 
-  // 2. Structured Ratings avg (weight: 0.25)
+  // Structured ratings avg (weight: 0.25)
   if (feedback.ratings) {
     const ratingValues = Object.values(feedback.ratings).filter(v => v != null && v > 0);
     if (ratingValues.length > 0) {
@@ -31,20 +28,20 @@ function computeCompositeFeedbackScore(feedback) {
     }
   }
 
-  // 3. NPS Score (weight: 0.15)
+  // NPS (weight: 0.15)
   if (feedback.npsScore != null) {
     weightedSum += (feedback.npsScore / 10) * 0.15;
     totalWeight += 0.15;
   }
 
-  // 4. Pulse Mood (weight: 0.10)
+  // Pulse mood (weight: 0.10)
   if (feedback.pulseMood) {
     const moodMap = { thriving: 1.0, happy: 0.75, neutral: 0.5, stressed: 0.25, struggling: 0.0 };
     weightedSum += (moodMap[feedback.pulseMood] ?? 0.5) * 0.10;
     totalWeight += 0.10;
   }
 
-  // 5. Behavioral Frequencies (weight: 0.10)
+  // Behavioral frequencies (weight: 0.10)
   if (feedback.oneOnOneFrequency || feedback.feedbackFrequency || feedback.concernResponseTime) {
     const freqMap = { weekly: 1.0, biweekly: 0.75, monthly: 0.5, rarely: 0.25, never: 0.0, after_every_task: 1.0, same_day: 1.0, within_week: 0.75, within_month: 0.5 };
     const freqValues = [
@@ -60,24 +57,19 @@ function computeCompositeFeedbackScore(feedback) {
     }
   }
 
-  // 6. Peer Comparison (weight: 0.10)
+  // Peer comparison (weight: 0.10)
   if (feedback.peerComparison) {
     const peerMap = { much_better: 1.0, better: 0.75, same: 0.5, worse: 0.25, much_worse: 0.0 };
     weightedSum += (peerMap[feedback.peerComparison] ?? 0.5) * 0.10;
     totalWeight += 0.10;
   }
 
-  // Normalize to account for missing signals
+  // Normalize for missing signals
   if (totalWeight === 0) return null;
   return Math.round((weightedSum / totalWeight) * 100) / 100;
 }
 
-/**
- * POST /api/feedback/submit
- * Employee submits enhanced feedback about their manager.
- * Sentiment score is calculated via AI, composite score is computed from all signals.
- * Protected: only authenticated employees.
- */
+// POST /api/feedback/submit — employee submits feedback
 router.post("/submit", authMiddleware, requireRole("employee"), async (req, res) => {
   try {
     const {
@@ -103,19 +95,19 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       return res.status(400).json({ message: "Feedback comment is required" });
     }
 
-    // Get employee name
+    // Lookup employee
     const employee = await Employee.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // Get manager to verify they exist
+    // Verify manager exists
     const manager = await Manager.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
     }
 
-    // Calculate sentiment score via AI
+    // Calculate sentiment via AI
     console.log(`📝 Analyzing sentiment for feedback from ${employee.name}...`);
     let sentimentScore;
     try {
@@ -126,7 +118,7 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       sentimentScore = 0.5; // default neutral if AI fails
     }
 
-    // Build feedback object
+    // Build feedback data
     const feedbackData = {
       fromEmployee: employee.name,
       employeeId: employee._id,
@@ -135,7 +127,7 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       managerId,
     };
 
-    // Add optional enhanced fields
+    // Add optional fields
     if (ratings) feedbackData.ratings = ratings;
     if (npsScore != null) feedbackData.npsScore = npsScore;
     if (feedbackCategory) feedbackData.feedbackCategory = feedbackCategory;
@@ -153,11 +145,10 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
     feedbackData.compositeFeedbackScore = computeCompositeFeedbackScore(feedbackData);
     console.log(`📊 Composite feedback score: ${feedbackData.compositeFeedbackScore}`);
 
-    // Store feedback
+    // Save feedback
     const feedback = await Feedback.create(feedbackData);
 
-    // ── Invalidate AI Cache for today ──
-    // This ensures the next dashboard view triggers a fresh AI re-calculation
+    // Invalidate today's AI cache for this manager
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     await ScoreSnapshot.deleteOne({
@@ -188,12 +179,7 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
   }
 });
 
-/**
- * GET /api/feedback/my-feedbacks
- * Employee views their own submitted feedbacks with pagination.
- * Query params: page (default 1), limit (default 20, max 50)
- * Protected: only authenticated employees.
- */
+// GET /api/feedback/my-feedbacks — paginated list of employee's own feedbacks
 router.get("/my-feedbacks", authMiddleware, requireRole("employee"), async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -209,7 +195,7 @@ router.get("/my-feedbacks", authMiddleware, requireRole("employee"), async (req,
       Feedback.countDocuments({ employeeId: req.user.id }),
     ]);
 
-    // Get manager name for each feedback
+    // Attach manager name to each feedback
     const managerIds = [...new Set(feedbacks.map(f => f.managerId.toString()))];
     const managers = await Manager.find({ _id: { $in: managerIds } }).lean();
     const managerMap = {};
@@ -230,7 +216,7 @@ router.get("/my-feedbacks", authMiddleware, requireRole("employee"), async (req,
   }
 });
 
-// CREATE feedback (legacy — kept for seed/admin use)
+// POST /api/feedback — legacy create (for seed/admin)
 router.post("/", async (req, res) => {
   try {
     const feedback = await Feedback.create(req.body);
@@ -240,8 +226,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// GET feedback by manager (ANONYMOUS: exclude employee names/IDs)
-// Query params: page (default 1), limit (default 20, max 50)
+// GET /api/feedback/manager/:managerId — anonymous, paginated
 router.get("/manager/:managerId", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -250,7 +235,7 @@ router.get("/manager/:managerId", async (req, res) => {
 
     const [feedbacks, total] = await Promise.all([
       Feedback.find({ managerId: req.params.managerId })
-        .select("-fromEmployee -employeeId") // Identity security: Strip names and IDs
+        .select("-fromEmployee -employeeId") // Strip employee identity
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),

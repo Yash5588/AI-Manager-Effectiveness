@@ -2,12 +2,7 @@ const express = require("express");
 const router = express.Router();
 const ScoreSnapshot = require("../models/ScoreSnapshot");
 
-/**
- * GET /api/score-snapshots/:managerId
- * Returns the score history for a manager.
- * Query params:
- *   - days (default 90): how many days back to look
- */
+// GET /api/score-snapshots/:managerId — score history (query: days, default 90)
 router.get("/:managerId", async (req, res) => {
     try {
         const { managerId } = req.params;
