@@ -6,7 +6,7 @@ const openRouterClient = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   defaultHeaders: {
     "HTTP-Referer": "http://localhost:3000",
-    "X-Title": "AI Manager Effectiveness",
+    "X-Title": "Manager Effectiveness",
   },
 });
 

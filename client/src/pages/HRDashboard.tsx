@@ -273,7 +273,7 @@ const HRDashboard = () => {
                                     { label: "Total Managers", value: overview?.totalManagers || 0, icon: Building2, color: "text-violet-400" },
                                     { label: "Total Employees", value: overview?.totalEmployees || 0, icon: Users, color: "text-primary" },
                                     { label: "Total Feedbacks", value: overview?.totalFeedbacks || 0, icon: MessageSquare, color: "text-accent" },
-                                    { label: "AI Score Avg", value: `${overview?.avgEffectiveness || 0}%`, icon: Sparkles, color: "text-primary shadow-sm shadow-primary/20" },
+                                    { label: "Manager Score Avg", value: `${overview?.avgEffectiveness || 0}%`, icon: Sparkles, color: "text-primary shadow-sm shadow-primary/20" },
                                     { label: "Avg Sentiment", value: `${Math.round((overview?.avgSentiment || 0) * 100)}%`, icon: TrendingUp, color: "text-success" },
                                 ].map((stat, i) => (
                                     <motion.div
@@ -363,7 +363,7 @@ const HRDashboard = () => {
                                                     <Sparkles className="h-3 w-3 text-primary animate-pulse" />
                                                     {mgr.effectivenessScore}%
                                                 </p>
-                                                <p className="text-[10px] text-muted-foreground">AI Score</p>
+                                                <p className="text-[10px] text-muted-foreground">Manager Score</p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-sm font-bold text-foreground">{Math.round(mgr.sentimentScore * 100)}%</p>
@@ -600,7 +600,7 @@ const HRDashboard = () => {
                                                                     <Sparkles className="h-3 w-3 text-primary" />
                                                                     <p className={`text-lg font-bold ${getCategoryColor(mgr.category)}`}>{mgr.effectivenessScore}%</p>
                                                                 </div>
-                                                                <p className="text-[9px] text-muted-foreground">AI Score</p>
+                                                                <p className="text-[9px] text-muted-foreground">Manager Score</p>
                                                             </div>
                                                             <div className="w-px bg-border" />
                                                             <div className="text-center">
@@ -703,7 +703,7 @@ const HRDashboard = () => {
                                                             {entry.effectivenessScore}%
                                                         </p>
                                                     </div>
-                                                    <p className="text-[10px] text-muted-foreground">AI Score</p>
+                                                    <p className="text-[10px] text-muted-foreground">Manager Score</p>
                                                 </div>
 
                                                 {/* Sentiment */}

@@ -1,8 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const HR = require("../models/HR");
-const Manager = require("../models/Manager");
-const Employee = require("../models/Employee");
+const User = require("../models/User");
 const Feedback = require("../models/Feedback");
 const PerformanceMetric = require("../models/PerformanceMetric");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
@@ -33,15 +31,22 @@ function getFeedbackDateFilter() {
 }
 
 async function computeManagerAnalytics(managerId) {
-    const [employees, feedbacks, metrics, latestSnapshot, extendedMetrics] = await Promise.all([
-        Employee.find({ managerId }),
-        Feedback.find({ managerId, ...getFeedbackDateFilter() })
-            .sort({ createdAt: -1 })
-            .limit(FEEDBACK_SCORE_LIMIT),
+    const mongoose = require("mongoose");
+    const [employees, latestFeedbacks, metrics, latestSnapshot, extendedMetrics] = await Promise.all([
+        User.find({ managerId, userType: "employee" }),
+        Feedback.aggregate([
+            { $match: { managerId: new mongoose.Types.ObjectId(managerId), ...getFeedbackDateFilter() } },
+            { $sort: { createdAt: -1 } },
+            { $group: { _id: "$employeeId", doc: { $first: "$$ROOT" } } },
+            { $replaceRoot: { newRoot: "$doc" } },
+            { $sort: { createdAt: -1 } },
+        ]),
         PerformanceMetric.find({ managerId }),
         ScoreSnapshot.findOne({ managerId, aiScore: { $exists: true } }).sort({ createdAt: -1 }),
         ManagerExtendedMetrics.findOne({ managerId }),
     ]);
+
+    const feedbacks = latestFeedbacks;
 
     const avgEmployeeScore =
         employees.length > 0
@@ -66,16 +71,12 @@ async function computeManagerAnalytics(managerId) {
     if (latestSnapshot) {
         finalScore = latestSnapshot.aiScore;
         if (latestSnapshot.aiBreakdown) {
-            // Use AI breakdown if available
             breakdown = { ...breakdown, ...latestSnapshot.aiBreakdown };
-
-            // Sync AI feedback sentiment with avgFeedbackScore
             if (latestSnapshot.aiBreakdown.feedbackSentiment !== undefined) {
                 breakdown.avgFeedbackScore = latestSnapshot.aiBreakdown.feedbackSentiment / 100;
             }
         }
     } else {
-        // Fallback to formula ONLY if no AI score has ever been computed
         finalScore = Math.round(
             (avgEmployeeScore * 0.4 + avgFeedbackScore * 0.3 + avgMetricScore * 0.3) * 100
         );
@@ -100,9 +101,8 @@ async function computeManagerAnalytics(managerId) {
 router.get("/:hrId/managers", async (req, res) => {
     try {
         const { hrId } = req.params;
-        const managers = await Manager.find({ hrId }).select("-password");
+        const managers = await User.find({ hrId, userType: "manager" }).select("-password");
 
-        // Compute analytics for each manager
         const managersWithAnalytics = await Promise.all(
             managers.map(async (mgr) => {
                 const analytics = await computeManagerAnalytics(mgr._id);
@@ -139,7 +139,7 @@ router.get("/:hrId/managers", async (req, res) => {
 router.get("/:hrId/overview", async (req, res) => {
     try {
         const { hrId } = req.params;
-        const managers = await Manager.find({ hrId });
+        const managers = await User.find({ hrId, userType: "manager" });
 
         if (managers.length === 0) {
             return res.json({
@@ -154,11 +154,10 @@ router.get("/:hrId/overview", async (req, res) => {
         const managerIds = managers.map((m) => m._id);
 
         const [allEmployees, allFeedbacks] = await Promise.all([
-            Employee.find({ managerId: { $in: managerIds } }),
+            User.find({ managerId: { $in: managerIds }, userType: "employee" }),
             Feedback.find({ managerId: { $in: managerIds } }),
         ]);
 
-        // Compute per-manager analytics
         const managerAnalytics = await Promise.all(
             managers.map(async (mgr) => {
                 const analytics = await computeManagerAnalytics(mgr._id);
@@ -194,14 +193,14 @@ router.get("/:hrId/overview", async (req, res) => {
 router.get("/:hrId/hierarchy", async (req, res) => {
     try {
         const { hrId } = req.params;
-        const hr = await HR.findById(hrId).select("-password");
+        const hr = await User.findById(hrId).select("-password");
         if (!hr) return res.status(404).json({ message: "HR not found" });
 
-        const managers = await Manager.find({ hrId }).select("-password");
+        const managers = await User.find({ hrId, userType: "manager" }).select("-password");
 
         const hierarchy = await Promise.all(
             managers.map(async (mgr) => {
-                const employees = await Employee.find({ managerId: mgr._id }).select("-password");
+                const employees = await User.find({ managerId: mgr._id, userType: "employee" }).select("-password");
                 const analytics = await computeManagerAnalytics(mgr._id);
 
                 return {
@@ -244,18 +243,17 @@ router.get("/:hrId/hierarchy", async (req, res) => {
 router.get("/:hrId/leaderboard", async (req, res) => {
     try {
         const { hrId } = req.params;
-        const managers = await Manager.find({ hrId }).select("-password");
+        const managers = await User.find({ hrId, userType: "manager" }).select("-password");
 
         const leaderboard = await Promise.all(
             managers.map(async (mgr) => {
                 const analytics = await computeManagerAnalytics(mgr._id);
 
-                // Get trend data (last 7 days)
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
+                const twoMonthsAgo = new Date();
+                twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
                 const recentSnapshots = await ScoreSnapshot.find({
                     managerId: mgr._id,
-                    createdAt: { $gte: weekAgo },
+                    createdAt: { $gte: twoMonthsAgo },
                 }).sort({ createdAt: 1 });
 
                 let trend = 0;
@@ -275,15 +273,12 @@ router.get("/:hrId/leaderboard", async (req, res) => {
                     sentimentScore: analytics.breakdown.avgFeedbackScore,
                     category: analytics.category,
                     counts: analytics.counts,
-                    trend, // +/- change over last 7 days
+                    trend,
                 };
             })
         );
 
-        // Sort by effectiveness score (descending)
         leaderboard.sort((a, b) => b.effectivenessScore - a.effectivenessScore);
-
-        // Add rank
         leaderboard.forEach((m, i) => {
             m.rank = i + 1;
         });

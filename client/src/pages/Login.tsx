@@ -1,15 +1,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, LogIn, Shield, User, Building2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Loader2, LogIn, CheckCircle2, Shield, User, Building2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+const ROLE_CONFIG = {
+    hr: { label: "HR", icon: Building2, color: "text-violet-400", bg: "bg-violet-500/15 border-violet-500/30" },
+    manager: { label: "Manager", icon: Shield, color: "text-blue-400", bg: "bg-blue-500/15 border-blue-500/30" },
+    employee: { label: "Employee", icon: User, color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/30" },
+};
 
 const Login = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [role, setRole] = useState<"manager" | "employee" | "hr">("manager");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [detectedRole, setDetectedRole] = useState<"manager" | "employee" | "hr" | null>(null);
     const { login } = useAuth();
     const navigate = useNavigate();
 
@@ -17,19 +23,30 @@ const Login = () => {
         e.preventDefault();
         setError("");
         setLoading(true);
+        setDetectedRole(null);
 
         try {
-            await login(email, password, role);
-            if (role === "manager") {
-                navigate("/");
-            } else if (role === "hr") {
-                navigate("/hr");
-            } else {
-                navigate("/employee/feedback");
+            await login(email, password);
+
+            // Read back the user from localStorage to get the auto-detected role
+            const storedUser = localStorage.getItem("auth_user");
+            if (storedUser) {
+                const userData = JSON.parse(storedUser);
+                setDetectedRole(userData.role);
+
+                // Short delay to show the detected role before navigating
+                setTimeout(() => {
+                    if (userData.role === "manager") {
+                        navigate("/");
+                    } else if (userData.role === "hr") {
+                        navigate("/hr");
+                    } else {
+                        navigate("/employee/feedback");
+                    }
+                }, 1200);
             }
         } catch (err: any) {
             setError(err?.response?.data?.message || "Login failed. Please try again.");
-        } finally {
             setLoading(false);
         }
     };
@@ -67,42 +84,31 @@ const Login = () => {
 
                 {/* Login Card */}
                 <div className="glass-card rounded-xl p-8 border border-border">
-                    {/* Role Selector */}
-                    <div className="flex gap-2 mb-6">
-                        <button
-                            type="button"
-                            onClick={() => setRole("hr")}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${role === "hr"
-                                ? "gradient-primary text-primary-foreground shadow-lg"
-                                : "bg-secondary text-muted-foreground hover:text-foreground"
-                                }`}
-                        >
-                            <Building2 className="h-4 w-4" />
-                            HR
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setRole("manager")}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${role === "manager"
-                                ? "gradient-primary text-primary-foreground shadow-lg"
-                                : "bg-secondary text-muted-foreground hover:text-foreground"
-                                }`}
-                        >
-                            <Shield className="h-4 w-4" />
-                            Manager
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setRole("employee")}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${role === "employee"
-                                ? "gradient-primary text-primary-foreground shadow-lg"
-                                : "bg-secondary text-muted-foreground hover:text-foreground"
-                                }`}
-                        >
-                            <User className="h-4 w-4" />
-                            Employee
-                        </button>
-                    </div>
+                    {/* Detected Role Banner */}
+                    <AnimatePresence mode="wait">
+                        {detectedRole && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10, height: 0 }}
+                                animate={{ opacity: 1, y: 0, height: "auto" }}
+                                exit={{ opacity: 0, y: -10, height: 0 }}
+                                className="mb-6"
+                            >
+                                <div className={`flex items-center gap-3 p-4 rounded-xl border ${ROLE_CONFIG[detectedRole].bg}`}>
+                                    <CheckCircle2 className={`h-5 w-5 ${ROLE_CONFIG[detectedRole].color}`} />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-semibold text-foreground">
+                                            Authenticated as {ROLE_CONFIG[detectedRole].label}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">Redirecting to dashboard...</p>
+                                    </div>
+                                    {(() => {
+                                        const Icon = ROLE_CONFIG[detectedRole].icon;
+                                        return <Icon className={`h-5 w-5 ${ROLE_CONFIG[detectedRole].color}`} />;
+                                    })()}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
@@ -113,9 +119,10 @@ const Login = () => {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder={role === "hr" ? "priya.sharma@company.com" : role === "manager" ? "jordan.lee@company.com" : "sam.wilson@company.com"}
+                                placeholder="Enter your email"
                                 className="w-full px-4 py-2.5 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                                 required
+                                disabled={!!detectedRole}
                             />
                         </div>
 
@@ -130,6 +137,7 @@ const Login = () => {
                                 placeholder="••••••••"
                                 className="w-full px-4 py-2.5 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                                 required
+                                disabled={!!detectedRole}
                             />
                         </div>
 
@@ -145,40 +153,25 @@ const Login = () => {
 
                         <button
                             type="submit"
-                            disabled={loading}
+                            disabled={loading || !!detectedRole}
                             className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg gradient-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50 transition-all"
                         >
-                            {loading ? (
+                            {loading && !detectedRole ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : detectedRole ? (
+                                <CheckCircle2 className="h-4 w-4" />
                             ) : (
                                 <LogIn className="h-4 w-4" />
                             )}
-                            {loading ? "Signing in..." : `Sign in as ${role === "hr" ? "HR" : role === "manager" ? "Manager" : "Employee"}`}
+                            {loading && !detectedRole
+                                ? "Authenticating..."
+                                : detectedRole
+                                    ? `Signed in as ${ROLE_CONFIG[detectedRole].label}`
+                                    : "Sign In"}
                         </button>
                     </form>
 
-                    {/* Demo credentials hint */}
-                    <div className="mt-6 p-3 rounded-lg bg-secondary/80 border border-border">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Demo Credentials:</p>
-                        {role === "hr" ? (
-                            <div className="text-xs text-muted-foreground space-y-0.5">
-                                <p><span className="text-foreground font-medium">priya.sharma@company.com</span> / password123</p>
-                                <p><span className="text-foreground font-medium">raj.patel@company.com</span> / password123</p>
-                            </div>
-                        ) : role === "manager" ? (
-                            <div className="text-xs text-muted-foreground space-y-0.5">
-                                <p><span className="text-foreground font-medium">jordan.lee@company.com</span> / password123</p>
-                                <p><span className="text-foreground font-medium">alex.morgan@company.com</span> / password123</p>
-                                <p><span className="text-foreground font-medium">diana.prince@company.com</span> / password123</p>
-                            </div>
-                        ) : (
-                            <div className="text-xs text-muted-foreground space-y-0.5">
-                                <p><span className="text-foreground font-medium">sam.wilson@company.com</span> / password123</p>
-                                <p><span className="text-foreground font-medium">bruce.w@company.com</span> / password123</p>
-                                <p><span className="text-foreground font-medium">riley.green@company.com</span> / password123</p>
-                            </div>
-                        )}
-                    </div>
+
                 </div>
             </motion.div>
         </div>

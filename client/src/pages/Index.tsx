@@ -168,15 +168,15 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Logout */}
           <div className="flex items-center gap-3">
             {manager && (
               <div className="flex items-center gap-2 bg-secondary/50 px-3 py-1.5 rounded-lg border border-border">
-                <div className="h-6 w-6 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-[10px]">
+                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-[10px]">
                   {manager.name.split(" ").map(n => n[0]).join("")}
                 </div>
                 <div className="text-left hidden sm:block">
                   <span className="block text-sm font-medium leading-none">{manager.name}</span>
+                  <span className="block text-[10px] text-muted-foreground">Manager</span>
                 </div>
               </div>
             )}

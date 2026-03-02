@@ -15,7 +15,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    login: (email: string, password: string, role: "manager" | "employee" | "hr") => Promise<void>;
+    login: (email: string, password: string) => Promise<void>;
     logout: () => void;
     isLoading: boolean;
 }
@@ -34,14 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (storedToken && storedUser) {
             setToken(storedToken);
             setUser(JSON.parse(storedUser));
-            // Set default auth header
             api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
         }
         setIsLoading(false);
     }, []);
 
-    const login = async (email: string, password: string, role: "manager" | "employee" | "hr") => {
-        const res = await api.post("/auth/login", { email, password, role });
+    const login = async (email: string, password: string) => {
+        const res = await api.post("/auth/login", { email, password });
         const { token: newToken, user: userData } = res.data;
 
         setToken(newToken);

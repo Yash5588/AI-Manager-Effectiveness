@@ -446,10 +446,17 @@ const EmployeeFeedback = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="text-right hidden sm:block">
-                            <p className="text-sm font-medium text-foreground">{user?.name}</p>
-                            <p className="text-xs text-muted-foreground">{user?.email}</p>
-                        </div>
+                        {user && (
+                            <div className="flex items-center gap-2 bg-secondary/50 px-3 py-1.5 rounded-lg border border-border">
+                                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-[10px]">
+                                    {user.name.split(" ").map(n => n[0]).join("")}
+                                </div>
+                                <div className="text-left hidden sm:block">
+                                    <span className="block text-sm font-medium leading-none">{user.name}</span>
+                                    <span className="block text-[10px] text-muted-foreground">Employee</span>
+                                </div>
+                            </div>
+                        )}
                         <button
                             onClick={handleLogout}
                             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-all text-sm"

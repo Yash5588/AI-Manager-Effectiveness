@@ -18,13 +18,12 @@ interface ScoreTrendChartProps {
     currentScore: number;
 }
 
-type TimeRange = "7d" | "14d" | "30d" | "90d";
+type TimeRange = "3m" | "6m" | "12m";
 
 const timeRangeLabels: Record<TimeRange, string> = {
-    "7d": "7 Days",
-    "14d": "14 Days",
-    "30d": "30 Days",
-    "90d": "90 Days",
+    "3m": "3 Months",
+    "6m": "6 Months",
+    "12m": "1 Year",
 };
 
 // Custom tooltip component
@@ -87,15 +86,15 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
     const [snapshots, setSnapshots] = useState<ScoreSnapshot[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [timeRange, setTimeRange] = useState<TimeRange>("30d");
+    const [timeRange, setTimeRange] = useState<TimeRange>("12m");
 
     useEffect(() => {
         if (!managerId) return;
         setLoading(true);
         setError(null);
 
-        const days = parseInt(timeRange);
-        fetchScoreSnapshots(managerId, days)
+        const months = parseInt(timeRange);
+        fetchScoreSnapshots(managerId, months)
             .then((data) => {
                 setSnapshots(data);
             })
@@ -111,12 +110,10 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
         return snapshots.map((snap) => ({
             date: new Date(snap.createdAt).toLocaleDateString("en-US", {
                 month: "short",
-                day: "numeric",
+                year: "numeric",
             }),
             fullDate: new Date(snap.createdAt).toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
+                month: "long",
                 year: "numeric",
             }),
             finalScore: snap.finalScore,
@@ -259,8 +256,8 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
                             key={range}
                             onClick={() => setTimeRange(range)}
                             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${timeRange === range
-                                    ? "bg-primary text-primary-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
                             {timeRangeLabels[range]}

@@ -1,5 +1,5 @@
-const Manager = require("../models/Manager");
-const Employee = require("../models/Employee");
+const mongoose = require("mongoose");
+const User = require("../models/User");
 const Feedback = require("../models/Feedback");
 const PerformanceMetric = require("../models/PerformanceMetric");
 const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
@@ -57,19 +57,26 @@ exports.getManagerAnalytics = async (req, res) => {
     const metricsWeight = parseFloat(req.query.metricsWeight) || 0.3;
 
     // Fetch manager
-    const manager = await Manager.findById(managerId);
+    const manager = await User.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
     }
 
     // Fetch related data (limited to rolling window)
-    const [employees, feedbacks, metrics] = await Promise.all([
-      Employee.find({ managerId }),
-      Feedback.find({ managerId, ...getFeedbackDateFilter() })
-        .sort({ createdAt: -1 })
-        .limit(FEEDBACK_SCORE_LIMIT),
+    // For score calculation, use only the latest feedback per employee
+    const [employees, latestFeedbacks, metrics] = await Promise.all([
+      User.find({ managerId, userType: "employee" }),
+      Feedback.aggregate([
+        { $match: { managerId: new mongoose.Types.ObjectId(managerId), ...getFeedbackDateFilter() } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: "$employeeId", doc: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$doc" } },
+        { $sort: { createdAt: -1 } },
+      ]),
       PerformanceMetric.find({ managerId }),
     ]);
+
+    const feedbacks = latestFeedbacks;
 
     // Normalize and compute averages (0-1 scale)
     const avgEmployeeScore =
@@ -104,7 +111,7 @@ exports.getManagerAnalytics = async (req, res) => {
     const formulaScore = computeFinalScore(breakdown, weights);
     const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
 
-    // Fetch/compute AI score (24h cache)
+    // Fetch/compute Manager Effectiveness score (24h cache)
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
@@ -186,16 +193,20 @@ exports.generateSuggestions = async (req, res) => {
   try {
     const { managerId } = req.params;
 
-    const manager = await Manager.findById(managerId);
+    const manager = await User.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
     }
 
     const [employees, feedbacks, metrics, extendedMetrics] = await Promise.all([
-      Employee.find({ managerId }),
-      Feedback.find({ managerId, ...getFeedbackDateFilter() })
-        .sort({ createdAt: -1 })
-        .limit(FEEDBACK_SCORE_LIMIT),
+      User.find({ managerId, userType: "employee" }),
+      Feedback.aggregate([
+        { $match: { managerId: new mongoose.Types.ObjectId(managerId), ...getFeedbackDateFilter() } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: "$employeeId", doc: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$doc" } },
+        { $sort: { createdAt: -1 } },
+      ]),
       PerformanceMetric.find({ managerId }),
       ManagerExtendedMetrics.findOne({ managerId }),
     ]);
@@ -253,16 +264,20 @@ exports.generateEmployeeSuggestionsHandler = async (req, res) => {
   try {
     const { managerId } = req.params;
 
-    const manager = await Manager.findById(managerId);
+    const manager = await User.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
     }
 
     const [employees, feedbacks, metrics, extendedMetrics] = await Promise.all([
-      Employee.find({ managerId }),
-      Feedback.find({ managerId, ...getFeedbackDateFilter() })
-        .sort({ createdAt: -1 })
-        .limit(FEEDBACK_SCORE_LIMIT),
+      User.find({ managerId, userType: "employee" }),
+      Feedback.aggregate([
+        { $match: { managerId: new mongoose.Types.ObjectId(managerId), ...getFeedbackDateFilter() } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: "$employeeId", doc: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$doc" } },
+        { $sort: { createdAt: -1 } },
+      ]),
       PerformanceMetric.find({ managerId }),
       ManagerExtendedMetrics.findOne({ managerId }),
     ]);
@@ -320,16 +335,20 @@ exports.getAttritionPredictions = async (req, res) => {
   try {
     const { managerId } = req.params;
 
-    const manager = await Manager.findById(managerId);
+    const manager = await User.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
     }
 
     const [employees, feedbacks, metrics, extendedMetrics] = await Promise.all([
-      Employee.find({ managerId }),
-      Feedback.find({ managerId, ...getFeedbackDateFilter() })
-        .sort({ createdAt: -1 })
-        .limit(FEEDBACK_SCORE_LIMIT),
+      User.find({ managerId, userType: "employee" }),
+      Feedback.aggregate([
+        { $match: { managerId: new mongoose.Types.ObjectId(managerId), ...getFeedbackDateFilter() } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: "$employeeId", doc: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$doc" } },
+        { $sort: { createdAt: -1 } },
+      ]),
       PerformanceMetric.find({ managerId }),
       ManagerExtendedMetrics.findOne({ managerId }),
     ]);

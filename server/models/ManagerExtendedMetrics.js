@@ -4,7 +4,7 @@ const ManagerExtendedMetricsSchema = new mongoose.Schema(
     {
         managerId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Manager",
+            ref: "User",
             required: true,
             unique: true,
         },

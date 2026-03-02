@@ -49,7 +49,7 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
     { label: "Total Employees", value: manager.totalEmployees, icon: Users, color: "text-primary" },
     { label: "Avg Sentiment", value: `${(manager.sentimentScore * 100).toFixed(0)}%`, icon: TrendingUp, color: "text-success" },
     { label: "Feedbacks", value: feedbacks.length, icon: MessageSquare, color: "text-accent" },
-    { label: "AI Score", value: `${manager.effectivenessScore}%`, icon: Sparkles, color: "text-primary shadow-sm" },
+    { label: "Manager Score", value: `${manager.effectivenessScore}%`, icon: Sparkles, color: "text-primary shadow-sm" },
   ];
 
   const analysis = {
@@ -92,7 +92,7 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
           color={manager.sentimentScore > 0.6 ? "success" : manager.sentimentScore < 0.4 ? "destructive" : "accent"}
         />
         <ScoreGauge
-          label="AI Effectiveness Score"
+          label="Manager Effectiveness Score"
           value={manager.effectivenessScore}
           max={100}
           color="primary"

@@ -8,7 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('AI Manager Effectiveness API running');
+  res.send('Manager Effectiveness API running');
 });
 
 module.exports = app;

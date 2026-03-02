@@ -8,7 +8,7 @@ const FeedbackSchema = new mongoose.Schema(
     },
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee"
+      ref: "User"
     },
     comment: {
       type: String,
@@ -103,7 +103,7 @@ const FeedbackSchema = new mongoose.Schema(
 
     managerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Manager",
+      ref: "User",
       required: true
     }
   },

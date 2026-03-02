@@ -303,10 +303,10 @@ export default api;
 
 export async function fetchScoreSnapshots(
   managerId: string,
-  days: number = 90
+  months: number = 12
 ): Promise<ScoreSnapshot[]> {
   const res = await api.get(`/score-snapshots/${managerId}`, {
-    params: { days },
+    params: { months },
   });
   return res.data;
 }

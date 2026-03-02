@@ -6,7 +6,7 @@ const openRouterClient = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     defaultHeaders: {
         "HTTP-Referer": "http://localhost:3000",
-        "X-Title": "AI Manager Effectiveness",
+        "X-Title": "Manager Effectiveness",
     },
 });
 
@@ -36,7 +36,7 @@ function safeParseJSONObject(text) {
     }
 }
 
-// Compute AI effectiveness score
+// Compute Manager Effectiveness score
 async function computeAIScore(payload) {
     if (!process.env.OPENROUTER_API_KEY) {
         throw new Error("OPENROUTER_API_KEY is missing");
@@ -137,7 +137,7 @@ ${extendedSummary}
 
 3. Read the actual feedback comments carefully — they provide qualitative context that should influence the score beyond the raw numbers.
 
-4. The formula-based score (weighted average of primary signals only) is ${formulaScore}/100. Your AI score may differ by up to ±15 points based on qualitative analysis.
+4. The formula-based score (weighted average of primary signals only) is ${formulaScore}/100. Your Manager Effectiveness score may differ by up to ±15 points based on qualitative analysis.
 
 STRICT OUTPUT FORMAT — Return ONLY a valid JSON object with these exact fields:
 {

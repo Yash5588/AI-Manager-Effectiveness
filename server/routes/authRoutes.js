@@ -1,113 +1,60 @@
 const express = require("express");
 const router = express.Router();
-const Manager = require("../models/Manager");
-const Employee = require("../models/Employee");
-const HR = require("../models/HR");
+const User = require("../models/User");
 const { generateToken } = require("../middleware/auth");
 
-// POST /api/auth/login
+// POST /api/auth/login — auto-detects role from credentials
 router.post("/login", async (req, res) => {
     try {
-        const { email, password, role } = req.body;
+        const { email, password } = req.body;
 
-        if (!email || !password || !role) {
-            return res.status(400).json({ message: "Email, password, and role are required" });
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required" });
         }
 
-        if (role === "manager") {
-            const manager = await Manager.findOne({ email });
-            if (!manager) {
-                return res.status(401).json({ message: "Invalid email or password" });
-            }
-
-            const isMatch = await manager.comparePassword(password);
-            if (!isMatch) {
-                return res.status(401).json({ message: "Invalid email or password" });
-            }
-
-            const token = generateToken({
-                id: manager._id,
-                email: manager.email,
-                name: manager.name,
-                role: "manager"
-            });
-
-            return res.json({
-                token,
-                user: {
-                    id: manager._id,
-                    name: manager.name,
-                    email: manager.email,
-                    department: manager.department,
-                    role: "manager"
-                }
-            });
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(401).json({ message: "Invalid email or password" });
         }
 
-        if (role === "employee") {
-            const employee = await Employee.findOne({ email });
-            if (!employee) {
-                return res.status(401).json({ message: "Invalid email or password" });
-            }
-
-            const isMatch = await employee.comparePassword(password);
-            if (!isMatch) {
-                return res.status(401).json({ message: "Invalid email or password" });
-            }
-
-            const token = generateToken({
-                id: employee._id,
-                email: employee.email,
-                name: employee.name,
-                role: "employee",
-                managerId: employee.managerId
-            });
-
-            return res.json({
-                token,
-                user: {
-                    id: employee._id,
-                    name: employee.name,
-                    email: employee.email,
-                    role: "employee",
-                    jobRole: employee.role,
-                    managerId: employee.managerId
-                }
-            });
+        const isMatch = await user.comparePassword(password);
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid email or password" });
         }
 
-        if (role === "hr") {
-            const hr = await HR.findOne({ email });
-            if (!hr) {
-                return res.status(401).json({ message: "Invalid email or password" });
-            }
+        const tokenPayload = {
+            id: user._id,
+            email: user.email,
+            name: user.name,
+            role: user.userType,
+        };
 
-            const isMatch = await hr.comparePassword(password);
-            if (!isMatch) {
-                return res.status(401).json({ message: "Invalid email or password" });
-            }
-
-            const token = generateToken({
-                id: hr._id,
-                email: hr.email,
-                name: hr.name,
-                role: "hr"
-            });
-
-            return res.json({
-                token,
-                user: {
-                    id: hr._id,
-                    name: hr.name,
-                    email: hr.email,
-                    department: hr.department,
-                    designation: hr.designation,
-                    role: "hr"
-                }
-            });
+        // Add role-specific payload fields
+        if (user.userType === "employee") {
+            tokenPayload.managerId = user.managerId;
         }
 
-        return res.status(400).json({ message: "Invalid role. Must be 'manager', 'employee', or 'hr'" });
+        const token = generateToken(tokenPayload);
+
+        const responseUser = {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.userType,
+        };
+
+        // Add role-specific response fields
+        if (user.userType === "manager") {
+            responseUser.department = user.department;
+        } else if (user.userType === "hr") {
+            responseUser.department = user.department;
+            responseUser.designation = user.designation;
+        } else if (user.userType === "employee") {
+            responseUser.jobRole = user.role;
+            responseUser.managerId = user.managerId;
+        }
+
+        return res.json({ token, user: responseUser });
     } catch (error) {
         console.error("Login error:", error);
         res.status(500).json({ message: "Server error" });

@@ -1,8 +1,6 @@
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
-const HR = require("./models/HR");
-const Manager = require("./models/Manager");
-const Employee = require("./models/Employee");
+const User = require("./models/User");
 const Feedback = require("./models/Feedback");
 const PerformanceMetric = require("./models/PerformanceMetric");
 const ScoreSnapshot = require("./models/ScoreSnapshot");
@@ -10,7 +8,6 @@ const ManagerExtendedMetrics = require("./models/ManagerExtendedMetrics");
 
 dotenv.config();
 
-// Helpers for snapshot generation
 function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
 }
@@ -25,30 +22,30 @@ const seedData = async () => {
 
         // Clear all data
         await Promise.all([
-            HR.deleteMany({}),
-            Manager.deleteMany({}),
-            Employee.deleteMany({}),
+            User.deleteMany({}),
             Feedback.deleteMany({}),
             PerformanceMetric.deleteMany({}),
             ScoreSnapshot.deleteMany({}),
             ManagerExtendedMetrics.deleteMany({}),
         ]);
-        console.log("Cleared all existing data.\n");
+        console.log("Cleared all existing User data and feedback/metrics.\n");
 
         // === HR Users ===
-        const hr1 = await HR.create({
+        const hr1 = await User.create({
             name: "Priya Sharma",
             email: "priya.sharma@company.com",
             password: "password123",
+            userType: "hr",
             department: "Human Resources",
             designation: "HR Director",
         });
         console.log(`✅ Created HR 1: ${hr1.name} (${hr1.email})`);
 
-        const hr2 = await HR.create({
+        const hr2 = await User.create({
             name: "Raj Patel",
             email: "raj.patel@company.com",
             password: "password123",
+            userType: "hr",
             department: "Human Resources",
             designation: "HR Manager",
         });
@@ -57,10 +54,11 @@ const seedData = async () => {
         // === HR 1's Managers ===
 
         // Manager 1: Neutral (Operations)
-        const neutralManager = await Manager.create({
+        const neutralManager = await User.create({
             name: "Jordan Lee",
             email: "jordan.lee@company.com",
             password: "password123",
+            userType: "manager",
             department: "Operations",
             experienceYears: 5,
             hrId: hr1._id,
@@ -68,10 +66,10 @@ const seedData = async () => {
         console.log(`  📋 Manager: ${neutralManager.name} → HR: ${hr1.name}`);
 
         const neutralEmployees = await Promise.all([
-            Employee.create({ name: "Sam Wilson", email: "sam.wilson@company.com", password: "password123", role: "Ops Specialist", performanceRating: 3, managerId: neutralManager._id }),
-            Employee.create({ name: "Casey Smith", email: "casey.smith@company.com", password: "password123", role: "Logistics", performanceRating: 4, managerId: neutralManager._id }),
-            Employee.create({ name: "Jamie Doe", email: "jamie.doe@company.com", password: "password123", role: "Coordinator", performanceRating: 2, managerId: neutralManager._id }),
-            Employee.create({ name: "Taylor Brown", email: "taylor.brown@company.com", password: "password123", role: "Analyst", performanceRating: 3, managerId: neutralManager._id }),
+            User.create({ name: "Sam Wilson", email: "sam.wilson@company.com", password: "password123", userType: "employee", role: "Ops Specialist", performanceRating: 3, managerId: neutralManager._id }),
+            User.create({ name: "Casey Smith", email: "casey.smith@company.com", password: "password123", userType: "employee", role: "Logistics", performanceRating: 4, managerId: neutralManager._id }),
+            User.create({ name: "Jamie Doe", email: "jamie.doe@company.com", password: "password123", userType: "employee", role: "Coordinator", performanceRating: 2, managerId: neutralManager._id }),
+            User.create({ name: "Taylor Brown", email: "taylor.brown@company.com", password: "password123", userType: "employee", role: "Analyst", performanceRating: 3, managerId: neutralManager._id }),
         ]);
 
         await Feedback.insertMany([
@@ -101,10 +99,11 @@ const seedData = async () => {
         });
 
         // Manager 2: Negative (Sales)
-        const negativeManager = await Manager.create({
+        const negativeManager = await User.create({
             name: "Alex Morgan",
             email: "alex.morgan@company.com",
             password: "password123",
+            userType: "manager",
             department: "Sales",
             experienceYears: 8,
             hrId: hr1._id,
@@ -112,84 +111,88 @@ const seedData = async () => {
         console.log(`  📋 Manager: ${negativeManager.name} → HR: ${hr1.name}`);
 
         const negativeEmployees = await Promise.all([
-            Employee.create({ name: "Riley Green", email: "riley.green@company.com", password: "password123", role: "Sales Rep", performanceRating: 2, managerId: negativeManager._id }),
-            Employee.create({ name: "Morgan White", email: "morgan.white@company.com", password: "password123", role: "Account Exec", performanceRating: 1, managerId: negativeManager._id }),
-            Employee.create({ name: "Quinn Black", email: "quinn.black@company.com", password: "password123", role: "SDR", performanceRating: 2, managerId: negativeManager._id }),
+            User.create({ name: "Riley Green", email: "riley.green@company.com", password: "password123", userType: "employee", role: "Sales Rep", performanceRating: 2, managerId: negativeManager._id }),
+            User.create({ name: "Morgan White", email: "morgan.white@company.com", password: "password123", userType: "employee", role: "Account Exec", performanceRating: 1, managerId: negativeManager._id }),
+            User.create({ name: "Quinn Black", email: "quinn.black@company.com", password: "password123", userType: "employee", role: "SDR", performanceRating: 2, managerId: negativeManager._id }),
         ]);
 
         await Feedback.insertMany([
-            { fromEmployee: "Riley Green", employeeId: negativeEmployees[0]._id, comment: "Alex is very micromanaging and doesn't trust us.", sentimentScore: 0.2, managerId: negativeManager._id, ratings: { communication: 2, recognition: 1, availability: 2, careerGrowth: 1, empowerment: 1, fairness: 2, decisionMaking: 2, conflictResolution: 1 }, npsScore: 2, feedbackCategory: "leadership", feedbackType: "concern", pulseMood: "stressed", oneOnOneFrequency: "rarely", feedbackFrequency: "rarely", concernResponseTime: "rarely", peerComparison: "much_worse", timePeriod: "last_quarter", urgency: "high", willingToFollowUp: true, compositeFeedbackScore: 0.18 },
-            { fromEmployee: "Morgan White", employeeId: negativeEmployees[1]._id, comment: "The pressure is too high and expectations are unrealistic. I am burnt out.", sentimentScore: 0.1, managerId: negativeManager._id, ratings: { communication: 1, recognition: 1, availability: 1, careerGrowth: 1, empowerment: 1, fairness: 1, decisionMaking: 2, conflictResolution: 1 }, npsScore: 0, feedbackCategory: "worklife", feedbackType: "concern", pulseMood: "struggling", oneOnOneFrequency: "never", feedbackFrequency: "never", concernResponseTime: "never", peerComparison: "much_worse", timePeriod: "last_quarter", urgency: "high", willingToFollowUp: true, compositeFeedbackScore: 0.08 },
-            { fromEmployee: "Quinn Black", employeeId: negativeEmployees[2]._id, comment: "Rarely available for support. I feel lost in my role.", sentimentScore: 0.25, managerId: negativeManager._id, ratings: { communication: 2, recognition: 1, availability: 1, careerGrowth: 1, empowerment: 2, fairness: 2, decisionMaking: 2, conflictResolution: 2 }, npsScore: 2, feedbackCategory: "communication", feedbackType: "concern", pulseMood: "struggling", oneOnOneFrequency: "never", feedbackFrequency: "rarely", concernResponseTime: "rarely", peerComparison: "worse", timePeriod: "last_month", urgency: "high", willingToFollowUp: true, compositeFeedbackScore: 0.20 },
+            { fromEmployee: "Riley Green", employeeId: negativeEmployees[0]._id, comment: "Extremely micromanaged. Can't even talk to other departments without permission.", sentimentScore: 0.2, managerId: negativeManager._id, ratings: { communication: 1, recognition: 1, availability: 2, careerGrowth: 1, empowerment: 1, fairness: 2, decisionMaking: 2, conflictResolution: 1 }, npsScore: 1, feedbackCategory: "leadership", feedbackType: "concern", pulseMood: "stressed", urgency: "high", compositeFeedbackScore: 0.18 },
+            { fromEmployee: "Morgan White", employeeId: negativeEmployees[1]._id, comment: "I am actively looking for a new job. The culture under Alex is toxic.", sentimentScore: 0.1, managerId: negativeManager._id, ratings: { communication: 1, recognition: 1, availability: 1, careerGrowth: 1, empowerment: 1, fairness: 1, decisionMaking: 1, conflictResolution: 1 }, npsScore: 0, feedbackCategory: "culture", feedbackType: "concern", pulseMood: "struggling", urgency: "high", willingToFollowUp: true, compositeFeedbackScore: 0.08 },
+            { fromEmployee: "Quinn Black", employeeId: negativeEmployees[2]._id, comment: "Needs better empathy. Doesn't understand the challenges of the SDR role.", sentimentScore: 0.3, managerId: negativeManager._id, ratings: { communication: 2, recognition: 2, availability: 3, careerGrowth: 2, empowerment: 2, fairness: 3, decisionMaking: 2, conflictResolution: 2 }, npsScore: 3, feedbackCategory: "leadership", feedbackType: "suggestion", pulseMood: "neutral", urgency: "medium", compositeFeedbackScore: 0.35 },
         ]);
 
         await PerformanceMetric.insertMany([
-            { metricName: "Sales Quota Attainment", value: 35, managerId: negativeManager._id },
-            { metricName: "Client Retention", value: 40, managerId: negativeManager._id },
-            { metricName: "Team Morale Survey", value: 20, managerId: negativeManager._id },
+            { metricName: "Sales Quota Mastery", value: 35, managerId: negativeManager._id },
+            { metricName: "Pipeline Health", value: 42, managerId: negativeManager._id },
+            { metricName: "Forecast Accuracy", value: 30, managerId: negativeManager._id },
         ]);
 
         await ManagerExtendedMetrics.create({
             managerId: negativeManager._id,
-            teamRetentionRate: 45,
-            goalCompletionRate: 30,
-            oneOnOneFrequency: 20,
+            teamRetentionRate: 40,
+            goalCompletionRate: 35,
+            oneOnOneFrequency: 90, // Too frequent micromanagement
             employeeGrowthRate: 10,
-            responseTimeScore: 25,
-            peerReviewScore: 30,
-            projectDeliveryTimeliness: 35,
-            employeeEngagementScore: 20,
-            trainingInvestment: 15,
+            responseTimeScore: 40,
+            peerReviewScore: 25,
+            projectDeliveryTimeliness: 50,
+            employeeEngagementScore: 15,
+            trainingInvestment: 20,
         });
 
         // Manager 3: Positive (Product)
-        const positiveManager = await Manager.create({
-            name: "Diana Prince",
-            email: "diana.prince@company.com",
+        const positiveManager = await User.create({
+            name: "Sam Wilson",
+            email: "sam.feedback@company.com",
             password: "password123",
+            userType: "manager",
             department: "Product",
             experienceYears: 12,
             hrId: hr1._id,
         });
-        console.log(`  📋 Manager: ${positiveManager.name} → HR: ${hr1.name}\n`);
+        console.log(`  📋 Manager: ${positiveManager.name} → HR: ${hr1.name}`);
 
         const positiveEmployees = await Promise.all([
-            Employee.create({ name: "Bruce W.", email: "bruce.w@company.com", password: "password123", role: "Product Designer", performanceRating: 5, managerId: positiveManager._id }),
-            Employee.create({ name: "Clark K.", email: "clark.k@company.com", password: "password123", role: "Product Manager", performanceRating: 5, managerId: positiveManager._id }),
-            Employee.create({ name: "Barry A.", email: "barry.a@company.com", password: "password123", role: "Researcher", performanceRating: 4, managerId: positiveManager._id }),
+            User.create({ name: "Bruce W.", email: "bruce.w@company.com", password: "password123", userType: "employee", role: "Product Designer", performanceRating: 5, managerId: positiveManager._id }),
+            User.create({ name: "Clark K.", email: "clark.k@company.com", password: "password123", userType: "employee", role: "Product Manager", performanceRating: 5, managerId: positiveManager._id }),
+            User.create({ name: "Barry A.", email: "barry.a@company.com", password: "password123", userType: "employee", role: "Researcher", performanceRating: 4, managerId: positiveManager._id }),
         ]);
 
         await Feedback.insertMany([
-            { fromEmployee: "Bruce W.", employeeId: positiveEmployees[0]._id, comment: "Diana is an inspiring leader who empowers the team.", sentimentScore: 0.95, managerId: positiveManager._id, ratings: { communication: 5, recognition: 5, availability: 5, careerGrowth: 5, empowerment: 5, fairness: 5, decisionMaking: 5, conflictResolution: 4 }, npsScore: 10, feedbackCategory: "leadership", feedbackType: "appreciation", pulseMood: "thriving", oneOnOneFrequency: "weekly", feedbackFrequency: "after_every_task", concernResponseTime: "same_day", peerComparison: "much_better", timePeriod: "overall", urgency: "low", compositeFeedbackScore: 0.96 },
-            { fromEmployee: "Clark K.", employeeId: positiveEmployees[1]._id, comment: "Excellent strategic vision and very supportive of personal growth.", sentimentScore: 0.9, managerId: positiveManager._id, ratings: { communication: 5, recognition: 5, availability: 4, careerGrowth: 5, empowerment: 5, fairness: 5, decisionMaking: 5, conflictResolution: 5 }, npsScore: 10, feedbackCategory: "growth", feedbackType: "appreciation", pulseMood: "thriving", oneOnOneFrequency: "weekly", feedbackFrequency: "weekly", concernResponseTime: "same_day", peerComparison: "much_better", timePeriod: "overall", urgency: "low", compositeFeedbackScore: 0.94 },
-            { fromEmployee: "Barry A.", employeeId: positiveEmployees[2]._id, comment: "Creates a great work environment. Always open to new ideas.", sentimentScore: 0.85, managerId: positiveManager._id, ratings: { communication: 4, recognition: 5, availability: 4, careerGrowth: 4, empowerment: 5, fairness: 5, decisionMaking: 4, conflictResolution: 4 }, npsScore: 9, feedbackCategory: "culture", feedbackType: "appreciation", pulseMood: "happy", oneOnOneFrequency: "weekly", feedbackFrequency: "weekly", concernResponseTime: "same_day", peerComparison: "much_better", timePeriod: "last_quarter", urgency: "low", compositeFeedbackScore: 0.88 },
+            { fromEmployee: "Bruce W.", employeeId: positiveEmployees[0]._id, comment: "Sam is the best manager I've ever had. Inspiring and supportive.", sentimentScore: 0.95, managerId: positiveManager._id, ratings: { communication: 5, recognition: 5, availability: 5, careerGrowth: 5, empowerment: 5, fairness: 5, decisionMaking: 5, conflictResolution: 5 }, npsScore: 10, feedbackCategory: "leadership", feedbackType: "appreciation", pulseMood: "thriving", compositeFeedbackScore: 0.98 },
+            { fromEmployee: "Clark K.", employeeId: positiveEmployees[1]._id, comment: "Visionary leadership. Sam manages to keep the team focused and happy.", sentimentScore: 0.9, managerId: positiveManager._id, ratings: { communication: 5, recognition: 5, availability: 4, careerGrowth: 5, empowerment: 5, fairness: 5, decisionMaking: 5, conflictResolution: 5 }, npsScore: 10, feedbackCategory: "leadership", feedbackType: "appreciation", pulseMood: "happy", compositeFeedbackScore: 0.94 },
+            { fromEmployee: "Barry A.", employeeId: positiveEmployees[2]._id, comment: "Great mentorship. I've learned a lot in high-pressure situations.", sentimentScore: 0.85, managerId: positiveManager._id, ratings: { communication: 4, recognition: 5, availability: 5, careerGrowth: 4, empowerment: 5, fairness: 5, decisionMaking: 4, conflictResolution: 5 }, npsScore: 9, feedbackCategory: "growth", feedbackType: "appreciation", pulseMood: "thriving", compositeFeedbackScore: 0.89 },
         ]);
 
         await PerformanceMetric.insertMany([
-            { metricName: "Product Launch Success", value: 98, managerId: positiveManager._id },
-            { metricName: "Team Velocity", value: 95, managerId: positiveManager._id },
+            { metricName: "Feature Velocity", value: 95, managerId: positiveManager._id },
+            { metricName: "Design System Adoption", value: 88, managerId: positiveManager._id },
+            { metricName: "User CSAT", value: 92, managerId: positiveManager._id },
         ]);
 
         await ManagerExtendedMetrics.create({
             managerId: positiveManager._id,
-            teamRetentionRate: 95,
-            goalCompletionRate: 92,
-            oneOnOneFrequency: 90,
-            employeeGrowthRate: 85,
-            responseTimeScore: 88,
-            peerReviewScore: 92,
-            projectDeliveryTimeliness: 96,
-            employeeEngagementScore: 93,
-            trainingInvestment: 80,
+            teamRetentionRate: 100,
+            goalCompletionRate: 98,
+            oneOnOneFrequency: 85,
+            employeeGrowthRate: 90,
+            responseTimeScore: 92,
+            peerReviewScore: 95,
+            projectDeliveryTimeliness: 94,
+            employeeEngagementScore: 98,
+            trainingInvestment: 85,
         });
 
-        // === HR 2's Managers ===
+        // Add 3 Managers for HR 2
+        console.log(`\n=== HR 2's Managers ===`);
 
-        // Manager 4: Strong (Engineering)
-        const engManager = await Manager.create({
-            name: "Vikram Desai",
-            email: "vikram.desai@company.com",
+        // Eng Manager
+        const engManager = await User.create({
+            name: "Ananya Rao",
+            email: "ananya.rao@company.com",
             password: "password123",
+            userType: "manager",
             department: "Engineering",
             experienceYears: 10,
             hrId: hr2._id,
@@ -197,44 +200,42 @@ const seedData = async () => {
         console.log(`  📋 Manager: ${engManager.name} → HR: ${hr2.name}`);
 
         const engEmployees = await Promise.all([
-            Employee.create({ name: "Ananya Rao", email: "ananya.rao@company.com", password: "password123", role: "Senior Developer", performanceRating: 5, managerId: engManager._id }),
-            Employee.create({ name: "Karthik Nair", email: "karthik.nair@company.com", password: "password123", role: "DevOps Engineer", performanceRating: 4, managerId: engManager._id }),
-            Employee.create({ name: "Meera Iyer", email: "meera.iyer@company.com", password: "password123", role: "Frontend Developer", performanceRating: 4, managerId: engManager._id }),
-            Employee.create({ name: "Rohan Joshi", email: "rohan.joshi@company.com", password: "password123", role: "QA Engineer", performanceRating: 3, managerId: engManager._id }),
+            User.create({ name: "Aman Gupta", email: "aman.gupta@company.com", password: "password123", userType: "employee", role: "Senior Developer", performanceRating: 5, managerId: engManager._id }),
+            User.create({ name: "Karthik Nair", email: "karthik.nair@company.com", password: "password123", userType: "employee", role: "DevOps Engineer", performanceRating: 4, managerId: engManager._id }),
+            User.create({ name: "Meera Iyer", email: "meera.iyer@company.com", password: "password123", userType: "employee", role: "Frontend Developer", performanceRating: 4, managerId: engManager._id }),
+            User.create({ name: "Rohan Joshi", email: "rohan.joshi@company.com", password: "password123", userType: "employee", role: "QA Engineer", performanceRating: 3, managerId: engManager._id }),
         ]);
 
         await Feedback.insertMany([
-            { fromEmployee: "Ananya Rao", employeeId: engEmployees[0]._id, comment: "Vikram is an excellent technical leader. He mentors the team well and gives clear direction.", sentimentScore: 0.92, managerId: engManager._id, ratings: { communication: 5, recognition: 5, availability: 4, careerGrowth: 5, empowerment: 5, fairness: 5, decisionMaking: 4, conflictResolution: 4 }, npsScore: 9, feedbackCategory: "technical", feedbackType: "appreciation", pulseMood: "thriving", oneOnOneFrequency: "weekly", feedbackFrequency: "weekly", concernResponseTime: "same_day", peerComparison: "much_better", timePeriod: "overall", urgency: "low", compositeFeedbackScore: 0.91 },
-            { fromEmployee: "Karthik Nair", employeeId: engEmployees[1]._id, comment: "Great at delegating tasks and trusting the team. Could improve on providing more regular feedback.", sentimentScore: 0.78, managerId: engManager._id, ratings: { communication: 3, recognition: 3, availability: 4, careerGrowth: 4, empowerment: 5, fairness: 4, decisionMaking: 4, conflictResolution: 3 }, npsScore: 7, feedbackCategory: "leadership", feedbackType: "suggestion", pulseMood: "happy", oneOnOneFrequency: "biweekly", feedbackFrequency: "monthly", concernResponseTime: "within_week", peerComparison: "better", timePeriod: "last_month", urgency: "low", compositeFeedbackScore: 0.74 },
-            { fromEmployee: "Meera Iyer", employeeId: engEmployees[2]._id, comment: "Very supportive and encourages learning new technologies. Love the tech talks he organizes.", sentimentScore: 0.85, managerId: engManager._id, ratings: { communication: 4, recognition: 4, availability: 4, careerGrowth: 5, empowerment: 4, fairness: 5, decisionMaking: 4, conflictResolution: 4 }, npsScore: 8, feedbackCategory: "growth", feedbackType: "appreciation", pulseMood: "happy", oneOnOneFrequency: "weekly", feedbackFrequency: "weekly", concernResponseTime: "same_day", peerComparison: "better", timePeriod: "last_quarter", urgency: "low", compositeFeedbackScore: 0.84 },
-            { fromEmployee: "Rohan Joshi", employeeId: engEmployees[3]._id, comment: "Good manager overall. Sometimes deadlines are too tight though.", sentimentScore: 0.6, managerId: engManager._id, ratings: { communication: 3, recognition: 3, availability: 3, careerGrowth: 3, empowerment: 3, fairness: 3, decisionMaking: 3, conflictResolution: 3 }, npsScore: 6, feedbackCategory: "worklife", feedbackType: "suggestion", pulseMood: "neutral", oneOnOneFrequency: "monthly", feedbackFrequency: "monthly", concernResponseTime: "within_week", peerComparison: "same", timePeriod: "last_month", urgency: "medium", compositeFeedbackScore: 0.55 },
+            { fromEmployee: "Aman Gupta", employeeId: engEmployees[0]._id, comment: "Technical expertise is great, but could improve delegation.", sentimentScore: 0.6, managerId: engManager._id, ratings: { communication: 4, recognition: 3, availability: 3, careerGrowth: 4, empowerment: 2, fairness: 5, decisionMaking: 4, conflictResolution: 3 }, npsScore: 7, feedbackCategory: "technical", feedbackType: "suggestion", pulseMood: "happy", compositeFeedbackScore: 0.60 },
+            { fromEmployee: "Meera Iyer", employeeId: engEmployees[2]._id, comment: "Encourages code quality over rushing. Very appreciated.", sentimentScore: 0.8, managerId: engManager._id, ratings: { communication: 5, recognition: 4, availability: 4, careerGrowth: 4, empowerment: 4, fairness: 5, decisionMaking: 5, conflictResolution: 4 }, npsScore: 9, feedbackCategory: "technical", feedbackType: "appreciation", pulseMood: "thriving", compositeFeedbackScore: 0.82 },
         ]);
 
         await PerformanceMetric.insertMany([
-            { metricName: "Sprint Velocity", value: 88, managerId: engManager._id },
-            { metricName: "Bug Resolution Rate", value: 92, managerId: engManager._id },
-            { metricName: "Code Review Coverage", value: 85, managerId: engManager._id },
-            { metricName: "Deployment Frequency", value: 78, managerId: engManager._id },
+            { metricName: "Code Quality Index", value: 85, managerId: engManager._id },
+            { metricName: "Deployment Frequency", value: 70, managerId: engManager._id },
+            { metricName: "MTTR", value: 90, managerId: engManager._id },
         ]);
 
         await ManagerExtendedMetrics.create({
             managerId: engManager._id,
-            teamRetentionRate: 88,
-            goalCompletionRate: 82,
-            oneOnOneFrequency: 75,
-            employeeGrowthRate: 70,
+            teamRetentionRate: 90,
+            goalCompletionRate: 85,
+            oneOnOneFrequency: 60,
+            employeeGrowthRate: 75,
             responseTimeScore: 80,
-            peerReviewScore: 82,
+            peerReviewScore: 78,
             projectDeliveryTimeliness: 85,
-            employeeEngagementScore: 78,
-            trainingInvestment: 72,
+            employeeEngagementScore: 88,
+            trainingInvestment: 95,
         });
 
-        // Manager 5: Mixed (Marketing)
-        const mktManager = await Manager.create({
-            name: "Sneha Kapoor",
-            email: "sneha.kapoor@company.com",
+        // Mkt Manager
+        const mktManager = await User.create({
+            name: "Arjun Mehta",
+            email: "arjun.mehta@company.com",
             password: "password123",
+            userType: "manager",
             department: "Marketing",
             experienceYears: 6,
             hrId: hr2._id,
@@ -242,173 +243,126 @@ const seedData = async () => {
         console.log(`  📋 Manager: ${mktManager.name} → HR: ${hr2.name}`);
 
         const mktEmployees = await Promise.all([
-            Employee.create({ name: "Arjun Mehta", email: "arjun.mehta@company.com", password: "password123", role: "Content Strategist", performanceRating: 4, managerId: mktManager._id }),
-            Employee.create({ name: "Divya Pillai", email: "divya.pillai@company.com", password: "password123", role: "Social Media Manager", performanceRating: 3, managerId: mktManager._id }),
-            Employee.create({ name: "Nikhil Sen", email: "nikhil.sen@company.com", password: "password123", role: "SEO Specialist", performanceRating: 2, managerId: mktManager._id }),
+            User.create({ name: "Divya Pillai", email: "divya.pillai@company.com", password: "password123", userType: "employee", role: "Content Strategist", performanceRating: 4, managerId: mktManager._id }),
+            User.create({ name: "Nikhil Sen", email: "nikhil.sen@company.com", password: "password123", userType: "employee", role: "Social Media Manager", 性能Rating: 3, managerId: mktManager._id }),
+            User.create({ name: "Sita Sharma", email: "sita.sharma@company.com", password: "password123", userType: "employee", role: "SEO Specialist", performanceRating: 2, managerId: mktManager._id }),
         ]);
 
         await Feedback.insertMany([
-            { fromEmployee: "Arjun Mehta", employeeId: mktEmployees[0]._id, comment: "Sneha has creative ideas but sometimes lacks follow-through on campaign execution.", sentimentScore: 0.55, managerId: mktManager._id, ratings: { communication: 3, recognition: 3, availability: 3, careerGrowth: 3, empowerment: 3, fairness: 3, decisionMaking: 2, conflictResolution: 3 }, npsScore: 5, feedbackCategory: "leadership", feedbackType: "suggestion", pulseMood: "neutral", oneOnOneFrequency: "monthly", feedbackFrequency: "monthly", concernResponseTime: "within_week", peerComparison: "same", timePeriod: "last_month", urgency: "medium", compositeFeedbackScore: 0.52 },
-            { fromEmployee: "Divya Pillai", employeeId: mktEmployees[1]._id, comment: "Decent manager. Wish she would involve us more in strategy decisions.", sentimentScore: 0.45, managerId: mktManager._id, ratings: { communication: 3, recognition: 2, availability: 3, careerGrowth: 2, empowerment: 2, fairness: 3, decisionMaking: 2, conflictResolution: 3 }, npsScore: 4, feedbackCategory: "leadership", feedbackType: "suggestion", pulseMood: "neutral", oneOnOneFrequency: "monthly", feedbackFrequency: "rarely", concernResponseTime: "within_month", peerComparison: "same", timePeriod: "last_quarter", urgency: "medium", compositeFeedbackScore: 0.42 },
-            { fromEmployee: "Nikhil Sen", employeeId: mktEmployees[2]._id, comment: "Communication could be better. I often don't know priorities until the last minute.", sentimentScore: 0.35, managerId: mktManager._id, ratings: { communication: 1, recognition: 2, availability: 2, careerGrowth: 2, empowerment: 2, fairness: 2, decisionMaking: 2, conflictResolution: 2 }, npsScore: 3, feedbackCategory: "communication", feedbackType: "concern", pulseMood: "stressed", oneOnOneFrequency: "rarely", feedbackFrequency: "rarely", concernResponseTime: "within_month", peerComparison: "worse", timePeriod: "last_month", urgency: "high", willingToFollowUp: true, compositeFeedbackScore: 0.30 },
+            { fromEmployee: "Divya Pillai", employeeId: mktEmployees[0]._id, comment: "Creative freedom is great. Arjun trusts us a lot.", sentimentScore: 0.9, managerId: mktManager._id, ratings: { communication: 4, recognition: 5, availability: 5, careerGrowth: 4, empowerment: 5, fairness: 4, decisionMaking: 4, conflictResolution: 4 }, npsScore: 10, feedbackCategory: "culture", feedbackType: "appreciation", pulseMood: "happy", compositeFeedbackScore: 0.88 },
+            { fromEmployee: "Sita Sharma", employeeId: mktEmployees[2]._id, comment: "Need more budget for high-impact campaigns.", sentimentScore: 0.5, managerId: mktManager._id, ratings: { communication: 3, recognition: 3, availability: 4, careerGrowth: 3, empowerment: 3, fairness: 4, decisionMaking: 2, conflictResolution: 3 }, npsScore: 6, feedbackCategory: "other", feedbackType: "suggestion", pulseMood: "neutral", compositeFeedbackScore: 0.52 },
         ]);
 
         await PerformanceMetric.insertMany([
-            { metricName: "Campaign ROI", value: 62, managerId: mktManager._id },
-            { metricName: "Lead Generation", value: 58, managerId: mktManager._id },
-            { metricName: "Brand Awareness Score", value: 70, managerId: mktManager._id },
+            { metricName: "Lead Gen Targeting", value: 75, managerId: mktManager._id },
+            { metricName: "Brand Engagement", value: 82, managerId: mktManager._id },
+            { metricName: "CAC Optimization", value: 65, managerId: mktManager._id },
         ]);
 
         await ManagerExtendedMetrics.create({
             managerId: mktManager._id,
-            teamRetentionRate: 70,
-            goalCompletionRate: 55,
+            teamRetentionRate: 85,
+            goalCompletionRate: 80,
             oneOnOneFrequency: 45,
-            employeeGrowthRate: 35,
-            responseTimeScore: 50,
-            peerReviewScore: 48,
-            projectDeliveryTimeliness: 58,
-            employeeEngagementScore: 42,
-            trainingInvestment: 30,
+            employeeGrowthRate: 60,
+            responseTimeScore: 70,
+            peerReviewScore: 75,
+            projectDeliveryTimeliness: 70,
+            employeeEngagementScore: 82,
+            trainingInvestment: 50,
         });
 
-        // Manager 6: Low (Customer Support)
-        const csManager = await Manager.create({
-            name: "Amit Gupta",
-            email: "amit.gupta@company.com",
+        // CS Manager
+        const csManager = await User.create({
+            name: "Pooja Reddy",
+            email: "pooja.reddy@company.com",
             password: "password123",
-            department: "Customer Support",
-            experienceYears: 3,
+            userType: "manager",
+            department: "Customer Success",
+            experienceYears: 4,
             hrId: hr2._id,
         });
-        console.log(`  📋 Manager: ${csManager.name} → HR: ${hr2.name}\n`);
+        console.log(`  📋 Manager: ${csManager.name} → HR: ${hr2.name}`);
 
         const csEmployees = await Promise.all([
-            Employee.create({ name: "Pooja Reddy", email: "pooja.reddy@company.com", password: "password123", role: "Support Lead", performanceRating: 3, managerId: csManager._id }),
-            Employee.create({ name: "Sanjay Kumar", email: "sanjay.kumar@company.com", password: "password123", role: "Support Agent", performanceRating: 2, managerId: csManager._id }),
-            Employee.create({ name: "Lakshmi Bhat", email: "lakshmi.bhat@company.com", password: "password123", role: "Support Agent", performanceRating: 1, managerId: csManager._id }),
-            Employee.create({ name: "Farhan Ali", email: "farhan.ali@company.com", password: "password123", role: "Escalation Specialist", performanceRating: 2, managerId: csManager._id }),
+            User.create({ name: "Sanjay Kumar", email: "sanjay.kumar@company.com", password: "password123", userType: "employee", role: "Support Lead", performanceRating: 3, managerId: csManager._id }),
+            User.create({ name: "Lakshmi Bhat", email: "lakshmi.bhat@company.com", password: "password123", userType: "employee", role: "Support Agent", performanceRating: 2, managerId: csManager._id }),
+            User.create({ name: "Farhan Ali", email: "farhan.ali@company.com", password: "password123", userType: "employee", role: "Support Agent", performanceRating: 1, managerId: csManager._id }),
+            User.create({ name: "Zoya Khan", email: "zoya.khan@company.com", password: "password123", userType: "employee", role: "Escalation Specialist", performanceRating: 2, managerId: csManager._id }),
         ]);
 
         await Feedback.insertMany([
-            { fromEmployee: "Pooja Reddy", employeeId: csEmployees[0]._id, comment: "Amit is new and still learning. He needs to be more decisive.", sentimentScore: 0.4, managerId: csManager._id, ratings: { communication: 3, recognition: 2, availability: 3, careerGrowth: 2, empowerment: 2, fairness: 3, decisionMaking: 2, conflictResolution: 2 }, npsScore: 4, feedbackCategory: "leadership", feedbackType: "suggestion", pulseMood: "neutral", oneOnOneFrequency: "monthly", feedbackFrequency: "rarely", concernResponseTime: "within_week", peerComparison: "worse", timePeriod: "last_month", urgency: "medium", compositeFeedbackScore: 0.38 },
-            { fromEmployee: "Sanjay Kumar", employeeId: csEmployees[1]._id, comment: "There is no clear escalation process. We waste time on unclear priorities.", sentimentScore: 0.25, managerId: csManager._id, ratings: { communication: 2, recognition: 1, availability: 2, careerGrowth: 1, empowerment: 2, fairness: 2, decisionMaking: 1, conflictResolution: 2 }, npsScore: 2, feedbackCategory: "communication", feedbackType: "concern", pulseMood: "stressed", oneOnOneFrequency: "rarely", feedbackFrequency: "rarely", concernResponseTime: "within_month", peerComparison: "worse", timePeriod: "last_quarter", urgency: "high", willingToFollowUp: true, compositeFeedbackScore: 0.22 },
-            { fromEmployee: "Lakshmi Bhat", employeeId: csEmployees[2]._id, comment: "I feel unsupported. Training was inadequate and the tools are outdated.", sentimentScore: 0.15, managerId: csManager._id, ratings: { communication: 1, recognition: 1, availability: 1, careerGrowth: 1, empowerment: 1, fairness: 2, decisionMaking: 1, conflictResolution: 1 }, npsScore: 1, feedbackCategory: "growth", feedbackType: "concern", pulseMood: "struggling", oneOnOneFrequency: "never", feedbackFrequency: "never", concernResponseTime: "rarely", peerComparison: "much_worse", timePeriod: "last_quarter", urgency: "high", willingToFollowUp: true, compositeFeedbackScore: 0.12 },
-            { fromEmployee: "Farhan Ali", employeeId: csEmployees[3]._id, comment: "Amit means well but lacks experience in managing a support team effectively.", sentimentScore: 0.35, managerId: csManager._id, ratings: { communication: 2, recognition: 2, availability: 2, careerGrowth: 2, empowerment: 2, fairness: 3, decisionMaking: 2, conflictResolution: 2 }, npsScore: 3, feedbackCategory: "leadership", feedbackType: "suggestion", pulseMood: "stressed", oneOnOneFrequency: "monthly", feedbackFrequency: "rarely", concernResponseTime: "within_month", peerComparison: "worse", timePeriod: "overall", urgency: "medium", compositeFeedbackScore: 0.30 },
+            { fromEmployee: "Farhan Ali", employeeId: csEmployees[2]._id, comment: "I feel overworked. No support during peak hours.", sentimentScore: 0.2, managerId: csManager._id, ratings: { communication: 2, recognition: 1, availability: 1, careerGrowth: 1, empowerment: 1, fairness: 2, decisionMaking: 3, conflictResolution: 2 }, npsScore: 1, feedbackCategory: "worklife", feedbackType: "concern", pulseMood: "stressed", urgency: "high", compositeFeedbackScore: 0.22 },
         ]);
 
         await PerformanceMetric.insertMany([
-            { metricName: "First Response Time", value: 40, managerId: csManager._id },
-            { metricName: "Customer Satisfaction", value: 45, managerId: csManager._id },
-            { metricName: "Ticket Resolution Rate", value: 55, managerId: csManager._id },
+            { metricName: "Ticket Resolution Time", value: 45, managerId: csManager._id },
+            { metricName: "Churn Prevention", value: 50, managerId: csManager._id },
+            { metricName: "Support CSAT", value: 40, managerId: csManager._id },
         ]);
 
         await ManagerExtendedMetrics.create({
             managerId: csManager._id,
-            teamRetentionRate: 55,
-            goalCompletionRate: 40,
+            teamRetentionRate: 65,
+            goalCompletionRate: 55,
             oneOnOneFrequency: 30,
-            employeeGrowthRate: 15,
-            responseTimeScore: 35,
-            peerReviewScore: 38,
-            projectDeliveryTimeliness: 42,
-            employeeEngagementScore: 28,
-            trainingInvestment: 20,
+            employeeGrowthRate: 25,
+            responseTimeScore: 40,
+            peerReviewScore: 42,
+            projectDeliveryTimeliness: 50,
+            employeeEngagementScore: 45,
+            trainingInvestment: 15,
         });
 
-        // === Score Snapshots (30 days for all 6 managers) ===
-        console.log("📈 Generating 30-day score snapshots...");
-
-        const allManagers = [
-            { mgr: neutralManager, base: 52, trend: 0.3, vol: 4, emp: 0.5, fb: 0.48, met: 0.67, ec: 4, fc: 4, mc: 3 },
-            { mgr: negativeManager, base: 25, trend: -0.1, vol: 3, emp: 0.25, fb: 0.18, met: 0.32, ec: 3, fc: 3, mc: 3 },
-            { mgr: positiveManager, base: 88, trend: 0.15, vol: 2, emp: 0.92, fb: 0.9, met: 0.97, ec: 3, fc: 3, mc: 2 },
-            { mgr: engManager, base: 78, trend: 0.25, vol: 3, emp: 0.81, fb: 0.79, met: 0.86, ec: 4, fc: 4, mc: 4 },
-            { mgr: mktManager, base: 48, trend: 0.1, vol: 4, emp: 0.5, fb: 0.45, met: 0.63, ec: 3, fc: 3, mc: 3 },
-            { mgr: csManager, base: 30, trend: 0.2, vol: 3, emp: 0.33, fb: 0.29, met: 0.47, ec: 4, fc: 4, mc: 3 },
-        ];
-
-        const DAYS = 30;
+        const allManagers = [neutralManager, negativeManager, positiveManager, engManager, mktManager, csManager];
         const now = new Date();
-
-        for (const { mgr, base, trend, vol, emp, fb, met, ec, fc, mc } of allManagers) {
+        for (const mgr of allManagers) {
+            console.log(`\nGenerating monthly historical snapshots for: ${mgr.name}...`);
             const snapshots = [];
-            let empScore = emp, fbScore = fb, metScore = met;
+            const baseEffectiveness = mgr.effectivenessScore || (mgr === positiveManager ? 0.9 : mgr === negativeManager ? 0.25 : 0.6);
+            const baseFeedback = mgr === positiveManager ? 0.95 : mgr === negativeManager ? 0.2 : 0.55;
+            const baseEmployee = mgr === positiveManager ? 0.98 : mgr === negativeManager ? 0.15 : 0.6;
+            const baseMetric = mgr === positiveManager ? 0.92 : mgr === negativeManager ? 0.35 : 0.7;
 
-            for (let d = DAYS; d >= 0; d--) {
-                const date = new Date(now);
-                date.setDate(date.getDate() - d);
-                date.setHours(9 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 60), 0, 0);
+            for (let m = 12; m >= 0; m--) {
+                const date = new Date(now.getFullYear(), now.getMonth() - m, 1, 12, 0, 0);
 
-                empScore = randomWalk(empScore + trend * 0.002, vol * 0.01);
-                fbScore = randomWalk(fbScore + trend * 0.002, vol * 0.012);
-                metScore = randomWalk(metScore + trend * 0.001, vol * 0.008);
-
-                const rawScore = empScore * 0.4 + fbScore * 0.3 + metScore * 0.3;
-                const finalScore = clamp(Math.round(rawScore * 100), 0, 100);
-                const category = finalScore >= 85 ? "Excellent" : finalScore >= 70 ? "Good" : finalScore >= 50 ? "Average" : "Needs Improvement";
+                const effectiveness = Math.round(randomWalk(baseEffectiveness, 0.07) * 100);
+                const feedbackValue = randomWalk(baseFeedback, 0.1);
+                const employeeValue = randomWalk(baseEmployee, 0.06);
+                const metricValue = randomWalk(baseMetric, 0.12);
 
                 snapshots.push({
                     managerId: mgr._id,
-                    finalScore,
+                    finalScore: effectiveness,
                     breakdown: {
-                        avgEmployeeScore: Math.round(empScore * 100) / 100,
-                        avgFeedbackScore: Math.round(fbScore * 100) / 100,
-                        avgMetricScore: Math.round(metScore * 100) / 100,
+                        avgEmployeeScore: employeeValue,
+                        avgFeedbackScore: feedbackValue,
+                        avgMetricScore: metricValue,
                     },
-                    category, counts: { employees: ec, feedbacks: fc, metrics: mc },
-                    createdAt: date, updatedAt: date,
+                    category: effectiveness >= 85 ? "Excellent" : effectiveness >= 70 ? "Good" : effectiveness >= 50 ? "Average" : "Needs Improvement",
+                    counts: {
+                        employees: 4,
+                        feedbacks: 12,
+                        metrics: 3,
+                    },
+                    aiScore: effectiveness,
+                    aiBreakdown: {
+                        leadershipClarity: Math.round(randomWalk(effectiveness / 100, 0.1) * 100),
+                        teamSentiment: Math.round(feedbackValue * 100),
+                        operationalEfficiency: Math.round(metricValue * 100),
+                        employeeGrowth: Math.round(employeeValue * 100),
+                    },
+                    createdAt: date,
                 });
             }
-
             await ScoreSnapshot.insertMany(snapshots);
-            const scores = snapshots.map((s) => s.finalScore);
-            console.log(`  📊 ${mgr.name}: ${snapshots.length} snapshots (${Math.min(...scores)} → ${Math.max(...scores)})`);
         }
 
-        // === Summary ===
-        console.log("\n============================================");
-        console.log("✅ Done seeding!");
-        console.log("============================================");
-        console.log("\n📋 Login Credentials:");
-        console.log("──────────────────────────────────────────");
-        console.log("HR:");
-        console.log("  priya.sharma@company.com / password123  (manages: Jordan, Alex, Diana)");
-        console.log("  raj.patel@company.com / password123     (manages: Vikram, Sneha, Amit)");
-        console.log("\nMANAGERS:");
-        console.log("  jordan.lee@company.com / password123");
-        console.log("  alex.morgan@company.com / password123");
-        console.log("  diana.prince@company.com / password123");
-        console.log("  vikram.desai@company.com / password123");
-        console.log("  sneha.kapoor@company.com / password123");
-        console.log("  amit.gupta@company.com / password123");
-        console.log("\nEMPLOYEES:");
-        console.log("  sam.wilson@company.com / password123");
-        console.log("  casey.smith@company.com / password123");
-        console.log("  jamie.doe@company.com / password123");
-        console.log("  taylor.brown@company.com / password123");
-        console.log("  riley.green@company.com / password123");
-        console.log("  morgan.white@company.com / password123");
-        console.log("  quinn.black@company.com / password123");
-        console.log("  bruce.w@company.com / password123");
-        console.log("  clark.k@company.com / password123");
-        console.log("  barry.a@company.com / password123");
-        console.log("  ananya.rao@company.com / password123");
-        console.log("  karthik.nair@company.com / password123");
-        console.log("  meera.iyer@company.com / password123");
-        console.log("  rohan.joshi@company.com / password123");
-        console.log("  arjun.mehta@company.com / password123");
-        console.log("  divya.pillai@company.com / password123");
-        console.log("  nikhil.sen@company.com / password123");
-        console.log("  pooja.reddy@company.com / password123");
-        console.log("  sanjay.kumar@company.com / password123");
-        console.log("  lakshmi.bhat@company.com / password123");
-        console.log("  farhan.ali@company.com / password123");
-        console.log("──────────────────────────────────────────");
-
-        process.exit();
-    } catch (err) {
-        console.error(err);
+        console.log("\n🚀 DB Successfully Seeded with Unified User Model!");
+        process.exit(0);
+    } catch (error) {
+        console.error("Seeding failed:", error);
         process.exit(1);
     }
 };

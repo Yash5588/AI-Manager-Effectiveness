@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Feedback = require("../models/Feedback");
-const Employee = require("../models/Employee");
-const Manager = require("../models/Manager");
+const User = require("../models/User");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { authMiddleware, requireRole } = require("../middleware/auth");
 const { analyzeSentiment } = require("../services/aiSuggestionsService");
@@ -96,15 +95,32 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
     }
 
     // Lookup employee
-    const employee = await Employee.findById(employeeId);
+    const employee = await User.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
     // Verify manager exists
-    const manager = await Manager.findById(managerId);
+    const manager = await User.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
+    }
+
+    // Rate limit: 1 feedback per employee per week
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const recentFeedback = await Feedback.findOne({
+      employeeId,
+      managerId,
+      createdAt: { $gte: oneWeekAgo },
+    }).sort({ createdAt: -1 });
+
+    if (recentFeedback) {
+      const nextAllowed = new Date(recentFeedback.createdAt);
+      nextAllowed.setDate(nextAllowed.getDate() + 7);
+      return res.status(429).json({
+        message: `You can submit feedback once per week. Next submission allowed on ${nextAllowed.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}.`,
+      });
     }
 
     // Calculate sentiment via AI
@@ -197,7 +213,7 @@ router.get("/my-feedbacks", authMiddleware, requireRole("employee"), async (req,
 
     // Attach manager name to each feedback
     const managerIds = [...new Set(feedbacks.map(f => f.managerId.toString()))];
-    const managers = await Manager.find({ _id: { $in: managerIds } }).lean();
+    const managers = await User.find({ _id: { $in: managerIds } }).lean();
     const managerMap = {};
     managers.forEach(m => { managerMap[m._id.toString()] = m.name; });
 

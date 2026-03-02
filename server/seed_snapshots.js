@@ -1,19 +1,14 @@
-// Seed historical score snapshots for all managers
-// Run AFTER seed_scenarios.js: node server/seed_snapshots.js
-
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
-const Manager = require("./models/Manager");
+const User = require("./models/User");
 const ScoreSnapshot = require("./models/ScoreSnapshot");
 
 dotenv.config();
 
-// Clamp value between min and max
 function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
 }
 
-// Random walk around a base value
 function randomWalk(base, volatility, min = 0, max = 1) {
     return clamp(base + (Math.random() - 0.5) * volatility, min, max);
 }
@@ -23,39 +18,37 @@ async function seedSnapshots() {
         await mongoose.connect(process.env.MONGO_URI);
         console.log("Connected to MongoDB...");
 
-        // Clear existing snapshots
         await ScoreSnapshot.deleteMany({});
         console.log("Cleared existing score snapshots.\n");
 
-        const managers = await Manager.find();
+        const managers = await User.find({ userType: "manager" });
         if (managers.length === 0) {
             console.error("No managers found. Run seed_scenarios.js first.");
             process.exit(1);
         }
 
-        // Profile config per department
         const profiles = {
             Operations: {
                 baseScore: 52,
                 trend: 0.3,
-                volatility: 4,
+                volatility: 6,
                 breakdown: { emp: 0.5, fb: 0.48, met: 0.67 },
             },
             Sales: {
                 baseScore: 25,
                 trend: -0.1,
-                volatility: 3,
+                volatility: 5,
                 breakdown: { emp: 0.25, fb: 0.18, met: 0.32 },
             },
             Product: {
                 baseScore: 88,
                 trend: 0.15,
-                volatility: 2,
+                volatility: 3,
                 breakdown: { emp: 0.92, fb: 0.9, met: 0.97 },
             },
         };
 
-        const DAYS = 30;
+        const MONTHS = 12;
         const now = new Date();
 
         for (const manager of managers) {
@@ -67,18 +60,13 @@ async function seedSnapshots() {
             let fbScore = profile.breakdown.fb;
             let metScore = profile.breakdown.met;
 
-            for (let d = DAYS; d >= 0; d--) {
-                const date = new Date(now);
-                date.setDate(date.getDate() - d);
-                // Random hour during workday
-                date.setHours(9 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 60), 0, 0);
+            for (let m = MONTHS; m >= 0; m--) {
+                const date = new Date(now.getFullYear(), now.getMonth() - m, 1, 12, 0, 0);
 
-                // Evolve scores with random walk
-                empScore = randomWalk(empScore + profile.trend * 0.002, 0.04);
-                fbScore = randomWalk(fbScore + profile.trend * 0.002, 0.05);
-                metScore = randomWalk(metScore + profile.trend * 0.001, 0.03);
+                empScore = randomWalk(empScore + profile.trend * 0.008, 0.06);
+                fbScore = randomWalk(fbScore + profile.trend * 0.008, 0.07);
+                metScore = randomWalk(metScore + profile.trend * 0.005, 0.05);
 
-                // Compute final score
                 const rawScore = empScore * 0.4 + fbScore * 0.3 + metScore * 0.3;
                 currentScore = clamp(Math.round(rawScore * 100), 0, 100);
 
@@ -112,14 +100,14 @@ async function seedSnapshots() {
 
             await ScoreSnapshot.insertMany(snapshots);
             console.log(
-                `📈 Seeded ${snapshots.length} snapshots for ${manager.name} (${manager.department}) ` +
+                `📈 Seeded ${snapshots.length} monthly snapshots for ${manager.name} (${manager.department}) ` +
                 `— score range: ${Math.min(...snapshots.map((s) => s.finalScore))} → ${Math.max(
                     ...snapshots.map((s) => s.finalScore)
                 )}`
             );
         }
 
-        console.log("\n✅ Historical score snapshots seeded successfully!");
+        console.log("\n✅ Monthly score snapshots seeded successfully!");
         process.exit();
     } catch (err) {
         console.error("Seed snapshots error:", err);

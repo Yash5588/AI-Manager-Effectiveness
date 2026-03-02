@@ -4,7 +4,7 @@ const ScoreSnapshotSchema = new mongoose.Schema(
     {
         managerId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Manager",
+            ref: "User",
             required: true,
         },
         finalScore: {
@@ -25,7 +25,7 @@ const ScoreSnapshotSchema = new mongoose.Schema(
             feedbacks: { type: Number, default: 0 },
             metrics: { type: Number, default: 0 },
         },
-        // AI score fields (cached from LLM)
+        // Manager effectiveness score fields (cached from LLM)
         aiScore: {
             type: Number,
             min: 0,
