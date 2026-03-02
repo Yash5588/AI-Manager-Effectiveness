@@ -20,6 +20,8 @@ import {
     User,
     Sparkles,
     UserMinus,
+    Mail,
+    CheckCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +38,8 @@ import {
     fetchEmployees,
     fetchFeedbacks,
     fetchAttritionPredictions,
+    sendReports,
+    sendManagerReport,
     type HROverview,
     type HRManager,
     type HierarchyData,
@@ -106,6 +110,8 @@ const HRDashboard = () => {
     const [sugsLoading, setSugsLoading] = useState(false);
     const [attritionPredictions, setAttritionPredictions] = useState<AttritionPrediction[]>([]);
     const [attritionLoading, setAttritionLoading] = useState(false);
+    const [reportsLoading, setReportsLoading] = useState(false);
+    const [reportsSuccess, setReportsSuccess] = useState<string | null>(null);
 
     // Deep dive data
     const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
@@ -186,6 +192,36 @@ const HRDashboard = () => {
         }
     };
 
+    const handleSendAllReports = async () => {
+        if (!user?.id) return;
+        setReportsLoading(true);
+        setReportsSuccess(null);
+        try {
+            const res = await sendReports(user.id);
+            setReportsSuccess(res.message);
+            setTimeout(() => setReportsSuccess(null), 5000);
+        } catch (e) {
+            console.error("Failed to send all reports:", e);
+        } finally {
+            setReportsLoading(false);
+        }
+    };
+
+    const handleSendSingleReport = async (managerId: string) => {
+        if (!user?.id) return;
+        setReportsLoading(true);
+        setReportsSuccess(null);
+        try {
+            const res = await sendManagerReport(user.id, managerId);
+            setReportsSuccess(res.message);
+            setTimeout(() => setReportsSuccess(null), 5000);
+        } catch (e) {
+            console.error("Failed to send manager report:", e);
+        } finally {
+            setReportsLoading(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -201,6 +237,7 @@ const HRDashboard = () => {
         { id: "leaderboard", label: "Leaderboard", icon: Trophy },
         { id: "suggestions", label: "AI Suggestions", icon: Lightbulb },
         { id: "attrition", label: "Attrition Risk", icon: UserMinus },
+        { id: "reports", label: "Report Center", icon: Mail },
     ];
 
     const selectedMgr = managers.find(m => m._id === selectedManager);
@@ -927,6 +964,121 @@ const HRDashboard = () => {
                                 loading={attritionLoading}
                                 onGenerate={() => selectedManager && handleGenerateAttrition(selectedManager)}
                             />
+                        </div>
+                    </TabsContent>
+
+                    {/* ══════════════ REPORT CENTER TAB ══════════════ */}
+                    <TabsContent value="reports">
+                        <div className="space-y-6">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-card/60 backdrop-blur-md border border-border/50 p-6 rounded-2xl shadow-xl">
+                                <div className="space-y-1">
+                                    <h3 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
+                                        <Mail className="h-6 w-6 text-primary" />
+                                        Report Center
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground max-w-md">
+                                        Distribute effectiveness insights across your leadership team. Send automated monthly reports with a single click.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        onClick={handleSendAllReports}
+                                        disabled={reportsLoading}
+                                        className="relative overflow-hidden group h-12 px-8 rounded-xl bg-gradient-to-r from-primary to-violet-600 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
+                                    >
+                                        <AnimatePresence mode="wait">
+                                            {reportsLoading ? (
+                                                <motion.div
+                                                    key="loading"
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className="flex items-center gap-2"
+                                                >
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    <span>Sending All...</span>
+                                                </motion.div>
+                                            ) : (
+                                                <motion.div
+                                                    key="idle"
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className="flex items-center gap-2"
+                                                >
+                                                    <Sparkles className="h-4 w-4" />
+                                                    <span>Send All Reports</span>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {reportsSuccess && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-3"
+                                >
+                                    <CheckCircle className="h-5 w-5" />
+                                    <span className="text-sm font-medium">{reportsSuccess}</span>
+                                </motion.div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {managers.map((mgr, i) => (
+                                    <motion.div
+                                        key={mgr._id}
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: i * 0.05 }}
+                                        className="relative group overflow-hidden"
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-violet-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <div className="glass-card h-full p-5 rounded-2xl border border-border/40 hover:border-primary/30 transition-colors flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm shadow-inner">
+                                                        {mgr.name.split(" ").map(n => n[0]).join("")}
+                                                    </div>
+                                                    <span className={`text-[10px] px-2.5 py-1 rounded-full border font-bold ${getCategoryBg(mgr.category)}`}>
+                                                        {mgr.category}
+                                                    </span>
+                                                </div>
+                                                <h4 className="font-display font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">{mgr.name}</h4>
+                                                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mb-4">
+                                                    <Building2 className="h-3 w-3" />
+                                                    {mgr.department}
+                                                </p>
+
+                                                <div className="flex items-center gap-4 mb-6">
+                                                    <div>
+                                                        <p className="text-lg font-bold text-foreground leading-none">{mgr.effectivenessScore}%</p>
+                                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Score</p>
+                                                    </div>
+                                                    <div className="w-px h-8 bg-border/50" />
+                                                    <div>
+                                                        <p className="text-lg font-bold text-foreground leading-none">{Math.round(mgr.sentimentScore * 100)}%</p>
+                                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Sentiment</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => handleSendSingleReport(mgr._id)}
+                                                disabled={reportsLoading}
+                                                className="w-full bg-secondary/50 border border-border/50 hover:bg-primary hover:text-primary-foreground group-hover:border-primary/30 transition-all rounded-lg h-10 gap-2"
+                                            >
+                                                <Mail className="h-3.5 w-3.5" />
+                                                Send Individual Report
+                                            </Button>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
                         </div>
                     </TabsContent>
                 </Tabs>

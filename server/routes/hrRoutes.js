@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
+
+router.get("/test", (req, res) => res.json({ message: "HR Routes are alive!" }));
 const Feedback = require("../models/Feedback");
 const PerformanceMetric = require("../models/PerformanceMetric");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
@@ -287,6 +289,34 @@ router.get("/:hrId/leaderboard", async (req, res) => {
     } catch (error) {
         console.error("HR leaderboard error:", error);
         res.status(500).json({ message: "Server error" });
+    }
+});
+
+// POST /api/hr/:hrId/send-reports — manually trigger monthly email reports for all
+router.post("/:hrId/send-reports", async (req, res) => {
+    try {
+        const { sendAllReports } = require("../schedulers/emailScheduler");
+        await sendAllReports(req.params.hrId);
+        res.json({ message: "Reports sent successfully to your managers" });
+    } catch (error) {
+        console.error("Send reports error:", error);
+        res.status(500).json({ message: "Failed to send reports" });
+    }
+});
+
+// POST /api/hr/:hrId/send-report/:managerId — send report to a single manager
+router.post("/:hrId/send-report/:managerId", async (req, res) => {
+    try {
+        const { generateHRReport, generateManagerReport } = require("../services/reportService");
+        const { sendEmail } = require("../services/emailService");
+
+        const mgrReport = await generateManagerReport(req.params.managerId);
+        await sendEmail(mgrReport.to, mgrReport.subject, mgrReport.html);
+
+        res.json({ message: `Report sent to ${mgrReport.to}` });
+    } catch (error) {
+        console.error("Send single report error:", error);
+        res.status(500).json({ message: "Failed to send report" });
     }
 });
 

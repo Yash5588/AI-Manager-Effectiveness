@@ -22,6 +22,9 @@ app.use("/api/manager-analytics", require("./routes/managerAnalyticsRoutes"));
 app.use("/api/score-snapshots", require("./routes/scoreSnapshotRoutes"));
 app.use("/api/hr", require("./routes/hrRoutes"));
 
+// Start the monthly email report scheduler
+require("./schedulers/emailScheduler");
+
 app.listen(process.env.PORT, () =>
   console.log(`Server running on port ${process.env.PORT}`)
 );

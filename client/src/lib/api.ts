@@ -413,3 +413,12 @@ export async function fetchLeaderboard(hrId: string): Promise<LeaderboardEntry[]
   return res.data;
 }
 
+export const sendReports = async (hrId: string): Promise<{ message: string }> => {
+  const response = await api.post(`/hr/${hrId}/send-reports`);
+  return response.data;
+};
+
+export const sendManagerReport = async (hrId: string, managerId: string): Promise<{ message: string }> => {
+  const response = await api.post(`/hr/${hrId}/send-report/${managerId}`);
+  return response.data;
+};
