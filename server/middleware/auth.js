@@ -1,13 +1,11 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "manager-effectiveness-secret-key-2026";
+const JWT_SECRET = "manager-effectiveness-secret-key-2026";
 
-// Generate JWT token
 function generateToken(payload) {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
 }
 
-// Verify JWT from Authorization header
 function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -24,7 +22,6 @@ function authMiddleware(req, res, next) {
     }
 }
 
-// Restrict access to specific roles
 function requireRole(...roles) {
     return (req, res, next) => {
         if (!req.user || !roles.includes(req.user.role)) {

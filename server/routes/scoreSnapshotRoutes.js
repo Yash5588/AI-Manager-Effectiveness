@@ -11,7 +11,6 @@ router.get("/:managerId", async (req, res) => {
         const since = new Date();
         since.setMonth(since.getMonth() - months);
 
-        // Get latest snapshot per month (same pattern as latest feedback per employee)
         const mongoose = require("mongoose");
         const snapshots = await ScoreSnapshot.aggregate([
             { $match: { managerId: new mongoose.Types.ObjectId(managerId), createdAt: { $gte: since } } },

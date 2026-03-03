@@ -8,7 +8,6 @@ const PerformanceMetric = require("../models/PerformanceMetric");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
 const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 
-// Compute a manager's analytics
 function normalizeEmployeeScore(rating) {
     return (rating - 1) / 4;
 }
@@ -22,7 +21,6 @@ function getPerformanceCategory(score) {
     return "Needs Improvement";
 }
 
-// Feedback query limits (same as analytics controller)
 const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
 const FEEDBACK_SCORE_LIMIT = 50;
 
@@ -137,7 +135,7 @@ router.get("/:hrId/managers", async (req, res) => {
     }
 });
 
-// GET /api/hr/:hrId/overview — returns aggregate stats for all managers under this HR
+// GET /api/hr/:hrId/overview 
 router.get("/:hrId/overview", async (req, res) => {
     try {
         const { hrId } = req.params;
@@ -191,7 +189,7 @@ router.get("/:hrId/overview", async (req, res) => {
     }
 });
 
-// GET /api/hr/:hrId/hierarchy — returns full org hierarchy: HR → Managers → Employees
+// GET /api/hr/:hrId/hierarchy 
 router.get("/:hrId/hierarchy", async (req, res) => {
     try {
         const { hrId } = req.params;
@@ -241,7 +239,7 @@ router.get("/:hrId/hierarchy", async (req, res) => {
     }
 });
 
-// GET /api/hr/:hrId/leaderboard — returns managers ranked by effectiveness and sentiment
+// GET /api/hr/:hrId/leaderboard 
 router.get("/:hrId/leaderboard", async (req, res) => {
     try {
         const { hrId } = req.params;

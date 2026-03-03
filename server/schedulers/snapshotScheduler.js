@@ -7,7 +7,6 @@ const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { computeAIScore } = require("../services/aiScoringService");
 
-// Feedback query limits (same as analytics controller)
 const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
 const FEEDBACK_AI_LIMIT = 20;
 
@@ -33,7 +32,6 @@ function getPerformanceCategory(score) {
 }
 
 
-// Compute snapshot for a single manager
 async function computeManagerSnapshot(managerId) {
     const [manager, employees, latestFeedbacks, metrics, extendedMetrics] = await Promise.all([
         User.findById(managerId),
@@ -53,7 +51,6 @@ async function computeManagerSnapshot(managerId) {
 
     const feedbacks = latestFeedbacks;
 
-    // Compute averages (0-1 scale)
     const avgEmployeeScore = employees.length > 0
         ? employees.reduce((s, e) => s + normalizeEmployeeScore(e.performanceRating), 0) / employees.length
         : 0.5;
@@ -80,7 +77,6 @@ async function computeManagerSnapshot(managerId) {
         metrics: metrics.length,
     };
 
-    // Call AI scoring
     const aiResult = await computeAIScore({
         manager: manager.toObject ? manager.toObject() : manager,
         employees: employees.map(e => (e.toObject ? e.toObject() : e)),
@@ -93,7 +89,6 @@ async function computeManagerSnapshot(managerId) {
 
     const category = getPerformanceCategory(aiResult.aiScore);
 
-    // Save weekly snapshot
     await ScoreSnapshot.create({
         managerId,
         finalScore: aiResult.aiScore,
@@ -110,7 +105,6 @@ async function computeManagerSnapshot(managerId) {
     return { manager: manager.name, score: aiResult.aiScore, category };
 }
 
-// Compute snapshots for all managers
 async function computeWeeklySnapshots() {
     try {
         const managers = await User.find({ userType: "manager" });
@@ -133,7 +127,6 @@ async function computeWeeklySnapshots() {
     }
 }
 
-// Run every Monday at 2:00 AM IST (Sunday 8:30 PM UTC)
 cron.schedule("30 20 * * 0", async () => {
     console.log("── Weekly snapshot cron started ──");
     await computeWeeklySnapshots();

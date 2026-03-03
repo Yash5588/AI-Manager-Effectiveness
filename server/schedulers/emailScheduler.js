@@ -3,13 +3,11 @@ const User = require("../models/User");
 const { generateHRReport, generateManagerReport } = require("../services/reportService");
 const { sendEmail } = require("../services/emailService");
 
-// Run on the 1st of every month at 9:00 AM IST (3:30 AM UTC)
 cron.schedule("30 3 1 * *", async () => {
     console.log("── Monthly email report job started ──");
     await sendAllReports();
 });
 
-// Core logic — also used by the manual trigger endpoint
 async function sendAllReports(specificHrId = null) {
     try {
         const query = { userType: "hr" };
@@ -22,12 +20,10 @@ async function sendAllReports(specificHrId = null) {
 
         for (const hr of hrUsers) {
             try {
-                // Send HR report
                 const hrReport = await generateHRReport(hr._id);
                 await sendEmail(hrReport.to, hrReport.subject, hrReport.html);
                 console.log(`✓ HR report sent to ${hr.name} (${hr.email})`);
 
-                // Send report to each manager under this HR
                 const managers = await User.find({ hrId: hr._id, userType: "manager" });
                 for (const mgr of managers) {
                     try {

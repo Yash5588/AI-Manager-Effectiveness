@@ -10,10 +10,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Auth routes
 app.use("/api/auth", require("./routes/authRoutes"));
 
-// Data routes
 app.use("/api/managers", require("./routes/managerRoutes"));
 app.use("/api/employees", require("./routes/employeeRoutes"));
 app.use("/api/feedback", require("./routes/feedbackRoutes"));
@@ -22,7 +20,6 @@ app.use("/api/manager-analytics", require("./routes/managerAnalyticsRoutes"));
 app.use("/api/score-snapshots", require("./routes/scoreSnapshotRoutes"));
 app.use("/api/hr", require("./routes/hrRoutes"));
 
-// Start schedulers
 require("./schedulers/emailScheduler");
 require("./schedulers/snapshotScheduler");
 

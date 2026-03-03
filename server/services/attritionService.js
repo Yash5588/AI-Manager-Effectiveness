@@ -29,29 +29,22 @@ function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
 }
 
-// ─── Formula-based Flight Risk (0-100) ───
-// Uses all available feedback signals for each employee
 function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
     let totalWeight = 0;
     let weightedSum = 0;
 
-    // 1. Sentiment dissatisfaction (weight: 0.20)
-    //    Lower sentiment → higher flight risk
     if (empFeedbacks.length > 0) {
         const avgSentiment = empFeedbacks.reduce((s, f) => s + (f.sentimentScore ?? 0.5), 0) / empFeedbacks.length;
         weightedSum += (1 - avgSentiment) * 0.20;
         totalWeight += 0.20;
     }
 
-    // 2. Composite feedback dissatisfaction (weight: 0.15)
     if (empFeedbacks.length > 0) {
         const avgComposite = empFeedbacks.reduce((s, f) => s + (f.compositeFeedbackScore ?? f.sentimentScore ?? 0.5), 0) / empFeedbacks.length;
         weightedSum += (1 - avgComposite) * 0.15;
         totalWeight += 0.15;
     }
 
-    // 3. Ratings dissatisfaction (weight: 0.15)
-    //    Average of all 8 rating dimensions across feedbacks
     const allRatings = empFeedbacks.filter(f => f.ratings);
     if (allRatings.length > 0) {
         const ratingAvgs = allRatings.map(f => {
@@ -59,12 +52,10 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
             return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 3;
         });
         const overallRatingAvg = ratingAvgs.reduce((s, v) => s + v, 0) / ratingAvgs.length;
-        // Normalize: 1→high risk, 5→low risk
         weightedSum += ((5 - overallRatingAvg) / 4) * 0.15;
         totalWeight += 0.15;
     }
 
-    // 4. NPS dissatisfaction (weight: 0.10)
     const npsValues = empFeedbacks.filter(f => f.npsScore != null).map(f => f.npsScore);
     if (npsValues.length > 0) {
         const avgNPS = npsValues.reduce((s, v) => s + v, 0) / npsValues.length;
@@ -72,7 +63,6 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
         totalWeight += 0.10;
     }
 
-    // 5. Pulse mood (weight: 0.10)
     const moodMap = { thriving: 0.0, happy: 0.2, neutral: 0.5, stressed: 0.8, struggling: 1.0 };
     const moods = empFeedbacks.filter(f => f.pulseMood).map(f => moodMap[f.pulseMood] ?? 0.5);
     if (moods.length > 0) {
@@ -81,8 +71,6 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
         totalWeight += 0.10;
     }
 
-    // 6. Behavioral frequencies (weight: 0.10)
-    //    Poor 1:1, feedback, and concern response → higher risk
     const freqMap = { weekly: 0.0, biweekly: 0.2, monthly: 0.5, rarely: 0.8, never: 1.0, after_every_task: 0.0, same_day: 0.0, within_week: 0.2, within_month: 0.5 };
     const freqSignals = [];
     empFeedbacks.forEach(f => {
@@ -96,7 +84,6 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
         totalWeight += 0.10;
     }
 
-    // 7. Peer comparison (weight: 0.05)
     const peerMap = { much_better: 0.0, better: 0.2, same: 0.5, worse: 0.8, much_worse: 1.0 };
     const peers = empFeedbacks.filter(f => f.peerComparison).map(f => peerMap[f.peerComparison] ?? 0.5);
     if (peers.length > 0) {
@@ -105,7 +92,6 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
         totalWeight += 0.05;
     }
 
-    // 8. Urgency level (weight: 0.05)
     const urgencyMap = { low: 0.0, medium: 0.5, high: 1.0 };
     const urgencies = empFeedbacks.filter(f => f.urgency).map(f => urgencyMap[f.urgency] ?? 0.0);
     if (urgencies.length > 0) {
@@ -114,8 +100,7 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
         totalWeight += 0.05;
     }
 
-    // 9. Follow-up willingness (weight: 0.05)
-    //    Willing to follow-up on concerns → signals unhappiness
+
     const followUps = empFeedbacks.filter(f => f.willingToFollowUp != null);
     if (followUps.length > 0) {
         const followUpRate = followUps.filter(f => f.willingToFollowUp).length / followUps.length;
@@ -123,7 +108,6 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
         totalWeight += 0.05;
     }
 
-    // 10. Team environment signals from extended metrics (weight: 0.05)
     const ext = extendedMetrics || {};
     const envSignals = [
         ext.teamRetentionRate != null ? (100 - ext.teamRetentionRate) / 100 : null,
@@ -136,47 +120,38 @@ function computeFormulaFlightRisk(employee, empFeedbacks, extendedMetrics) {
         totalWeight += 0.05;
     }
 
-    if (totalWeight === 0) return 50; // default when no data
+    if (totalWeight === 0) return 50;
     const raw = (weightedSum / totalWeight) * 100;
 
-    // Boost: high performers with high dissatisfaction get extra flight risk
     const perf = employee.performanceRating || 3;
     const perfBoost = perf >= 4 && raw > 50 ? (perf - 3) * 5 : 0;
 
     return clamp(Math.round(raw + perfBoost), 0, 100);
 }
 
-// ─── Formula-based Impact Score (0-100) ───
-// Measures consequence of losing this employee
+
 function computeFormulaImpactScore(employee, empFeedbacks, teamSize) {
     let totalWeight = 0;
     let weightedSum = 0;
 
-    // 1. Performance rating (weight: 0.40) — primary signal
     const perf = employee.performanceRating || 3;
     weightedSum += ((perf - 1) / 4) * 0.40;
     totalWeight += 0.40;
 
-    // 2. Team size factor (weight: 0.15)
-    //    Smaller teams → losing one person has bigger impact
     if (teamSize > 0) {
         const sizeImpact = clamp(1 - (teamSize - 1) / 10, 0.3, 1.0);
         weightedSum += sizeImpact * 0.15;
         totalWeight += 0.15;
     }
 
-    // 3. Peer comparison reflects how valuable others see the manager-employee relationship (weight: 0.10)
     const peerMap = { much_better: 1.0, better: 0.75, same: 0.5, worse: 0.25, much_worse: 0.0 };
     const peers = empFeedbacks.filter(f => f.peerComparison).map(f => peerMap[f.peerComparison] ?? 0.5);
     if (peers.length > 0) {
-        // High peer comparison = employee is in a good environment, losing them is impactful
         const avgPeer = peers.reduce((s, v) => s + v, 0) / peers.length;
         weightedSum += avgPeer * 0.10;
         totalWeight += 0.10;
     }
 
-    // 4. NPS contribution (weight: 0.10)
-    //    High NPS givers are engaged and their departure signals deeper issues
     const npsValues = empFeedbacks.filter(f => f.npsScore != null).map(f => f.npsScore);
     if (npsValues.length > 0) {
         const avgNPS = npsValues.reduce((s, v) => s + v, 0) / npsValues.length;
@@ -184,8 +159,6 @@ function computeFormulaImpactScore(employee, empFeedbacks, teamSize) {
         totalWeight += 0.10;
     }
 
-    // 5. Feedback engagement depth (weight: 0.10)
-    //    Employees who give detailed, frequent feedback are more invested — higher impact if lost
     if (empFeedbacks.length > 0) {
         const avgCommentLength = empFeedbacks.reduce((s, f) => s + (f.comment?.length || 0), 0) / empFeedbacks.length;
         const engagementDepth = clamp(avgCommentLength / 150, 0, 1); // 150+ chars = fully engaged
@@ -193,8 +166,6 @@ function computeFormulaImpactScore(employee, empFeedbacks, teamSize) {
         totalWeight += 0.10;
     }
 
-    // 6. Role seniority heuristic (weight: 0.15)
-    //    Senior/Lead/Manager roles have higher impact
     const role = (employee.role || "").toLowerCase();
     let roleWeight = 0.5; // default
     if (role.includes("senior") || role.includes("lead") || role.includes("principal") || role.includes("architect")) {
@@ -213,14 +184,12 @@ function computeFormulaImpactScore(employee, empFeedbacks, teamSize) {
     return clamp(Math.round((weightedSum / totalWeight) * 100), 0, 100);
 }
 
-// Get risk/impact level label
 function getLevel(score) {
     if (score >= 70) return "High";
     if (score >= 40) return "Medium";
     return "Low";
 }
 
-// Predict attrition risk for a team
 async function predictTeamAttrition(payload) {
     if (!process.env.OPENROUTER_API_KEY) {
         throw new Error("OPENROUTER_API_KEY is missing");
@@ -228,7 +197,6 @@ async function predictTeamAttrition(payload) {
 
     const { manager, employees, feedbacks, metrics, extendedMetrics } = payload;
 
-    // Step 1: Compute formula-based scores for each employee
     const formulaPredictions = employees.map(emp => {
         const empFeedbacks = feedbacks.filter(
             f => f.fromEmployee === emp.name || f.employeeId?.toString() === emp._id?.toString()
@@ -254,7 +222,6 @@ async function predictTeamAttrition(payload) {
         console.log(`   ${p.employeeName}: Flight=${p.flightRisk}% (${p.riskLevel}), Impact=${p.impactScore}% (${p.impactLevel})`)
     );
 
-    // Step 2: Send formula scores + context to AI for qualitative refinement
     const prompt = `
 You are an expert HR Data Scientist and Talent Strategist. 
 A formula-based model has already computed initial Flight Risk and Impact scores for each employee.
@@ -344,13 +311,11 @@ STRICT OUTPUT FORMAT — Return ONLY a JSON object:
             const parsed = safeParseJSONObject(content);
 
             if (parsed && Array.isArray(parsed.predictions)) {
-                // Validate and clamp AI-refined scores
                 const refined = parsed.predictions.map(p => {
                     const formula = formulaPredictions.find(fp => fp.employeeName === p.employeeName);
                     let flightRisk = clamp(Math.round(p.flightRisk), 0, 100);
                     let impactScore = clamp(Math.round(p.impactScore), 0, 100);
 
-                    // Enforce ±15 max deviation from formula
                     if (formula) {
                         flightRisk = clamp(flightRisk, formula.flightRisk - 15, formula.flightRisk + 15);
                         impactScore = clamp(impactScore, formula.impactScore - 15, formula.impactScore + 15);

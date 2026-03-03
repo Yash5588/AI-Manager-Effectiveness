@@ -8,10 +8,9 @@ const { generateAISuggestions, generateEmployeeSuggestions } = require("../servi
 
 const { predictTeamAttrition } = require("../services/attritionService");
 
-// Feedback query limits
 const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
-const FEEDBACK_SCORE_LIMIT = 50;  // max feedbacks used for score computation
-const FEEDBACK_AI_LIMIT = 20;     // max feedbacks sent to AI prompts
+const FEEDBACK_SCORE_LIMIT = 50; 
+const FEEDBACK_AI_LIMIT = 20;    
 
 function getFeedbackDateFilter() {
   const cutoff = new Date();
@@ -19,17 +18,14 @@ function getFeedbackDateFilter() {
   return { createdAt: { $gte: cutoff } };
 }
 
-// Normalize employee rating (1-5) to 0-1
 function normalizeEmployeeScore(rating) {
   return (rating - 1) / 4;
 }
 
-// Normalize metric value (0-100) to 0-1
 function normalizeMetricValue(value) {
   return Math.min(1, Math.max(0, value / 100));
 }
 
-// Get performance category from score
 function getPerformanceCategory(score) {
   if (score >= 85) return "Excellent";
   if (score >= 70) return "Good";
@@ -37,7 +33,6 @@ function getPerformanceCategory(score) {
   return "Needs Improvement";
 }
 
-// Compute weighted effectiveness score (0-100)
 function computeFinalScore(breakdown, weights) {
   const { avgEmployeeScore, avgFeedbackScore, avgMetricScore } = breakdown;
   const { employee = 0.4, feedback = 0.3, metrics = 0.3 } = weights;
@@ -48,7 +43,6 @@ function computeFinalScore(breakdown, weights) {
   return Math.round(raw * 100);
 }
 
-// GET /api/manager-analytics/:managerId
 exports.getManagerAnalytics = async (req, res) => {
   try {
     const { managerId } = req.params;
@@ -56,14 +50,11 @@ exports.getManagerAnalytics = async (req, res) => {
     const feedbackWeight = parseFloat(req.query.feedbackWeight) || 0.3;
     const metricsWeight = parseFloat(req.query.metricsWeight) || 0.3;
 
-    // Fetch manager
     const manager = await User.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
     }
 
-    // Fetch related data (limited to rolling window)
-    // For score calculation, use only the latest feedback per employee
     const [employees, latestFeedbacks, metrics] = await Promise.all([
       User.find({ managerId, userType: "employee" }),
       Feedback.aggregate([
@@ -78,12 +69,11 @@ exports.getManagerAnalytics = async (req, res) => {
 
     const feedbacks = latestFeedbacks;
 
-    // Normalize and compute averages (0-1 scale)
     const avgEmployeeScore =
       employees.length > 0
         ? employees.reduce((sum, e) => sum + normalizeEmployeeScore(e.performanceRating), 0) /
         employees.length
-        : 0.5; // default when no data
+        : 0.5;
 
     const avgFeedbackScore =
       feedbacks.length > 0
@@ -102,7 +92,6 @@ exports.getManagerAnalytics = async (req, res) => {
       avgMetricScore: Math.round(avgMetricScore * 100) / 100,
     };
 
-    // Apply weights and compute formula-based score
     const weights = {
       employee: employeeWeight,
       feedback: feedbackWeight,
@@ -111,7 +100,6 @@ exports.getManagerAnalytics = async (req, res) => {
     const formulaScore = computeFinalScore(breakdown, weights);
     const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
 
-    // Read latest weekly snapshot (created by cron) for AI-enhanced score
     const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId }) || {};
     const latestSnapshot = await ScoreSnapshot.findOne({
       managerId,
@@ -128,7 +116,6 @@ exports.getManagerAnalytics = async (req, res) => {
         aiWeaknesses: latestSnapshot.aiWeaknesses,
       };
     } else {
-      // No snapshot yet — use formula score as fallback
       finalScore = formulaScore;
       aiResult = {};
     }

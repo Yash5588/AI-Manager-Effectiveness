@@ -29,7 +29,6 @@ router.post("/login", async (req, res) => {
             role: user.userType,
         };
 
-        // Add role-specific payload fields
         if (user.userType === "employee") {
             tokenPayload.managerId = user.managerId;
         }
@@ -43,7 +42,6 @@ router.post("/login", async (req, res) => {
             role: user.userType,
         };
 
-        // Add role-specific response fields
         if (user.userType === "manager") {
             responseUser.department = user.department;
         } else if (user.userType === "hr") {

@@ -25,7 +25,6 @@ const ScoreSnapshotSchema = new mongoose.Schema(
             feedbacks: { type: Number, default: 0 },
             metrics: { type: Number, default: 0 },
         },
-        // Manager effectiveness score fields (from AI scoring)
         aiScore: {
             type: Number,
             min: 0,
@@ -47,7 +46,6 @@ const ScoreSnapshotSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Index for efficient manager score history queries
 ScoreSnapshotSchema.index({ managerId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("ScoreSnapshot", ScoreSnapshotSchema);

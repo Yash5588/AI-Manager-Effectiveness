@@ -5,7 +5,6 @@ const ScoreSnapshot = require("../models/ScoreSnapshot");
 const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 const mongoose = require("mongoose");
 
-// ── Shared helpers (same logic as hrRoutes.js) ──
 const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
 
 function normalizeEmployeeScore(rating) {
@@ -26,7 +25,6 @@ function getFeedbackDateFilter() {
     return { createdAt: { $gte: cutoff } };
 }
 
-// Compute analytics for a single manager
 async function computeManagerAnalytics(managerId) {
     const [employees, latestFeedbacks, metrics, latestSnapshot, extendedMetrics] = await Promise.all([
         User.find({ managerId, userType: "employee" }),
@@ -80,7 +78,6 @@ async function computeManagerAnalytics(managerId) {
 
     const category = getPerformanceCategory(finalScore);
 
-    // Get trend data
     const twoMonthsAgo = new Date();
     twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
     const recentSnapshots = await ScoreSnapshot.find({
@@ -105,7 +102,6 @@ async function computeManagerAnalytics(managerId) {
     };
 }
 
-// ── HTML Email Templates ──
 
 function getEmailStyles() {
     return `
@@ -158,13 +154,11 @@ function getMonthName() {
     const months = ["January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"];
     const now = new Date();
-    // Report is for the previous month
     const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
     const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     return `${months[prevMonth]} ${year}`;
 }
 
-// ── Generate HR Report ──
 
 async function generateHRReport(hrId) {
     const hr = await User.findById(hrId).select("-password");
@@ -179,7 +173,6 @@ async function generateHRReport(hrId) {
         };
     }
 
-    // Compute analytics for all managers
     const managerData = await Promise.all(
         managers.map(async (mgr) => {
             const analytics = await computeManagerAnalytics(mgr._id);
@@ -187,12 +180,10 @@ async function generateHRReport(hrId) {
         })
     );
 
-    // Compute aggregates
     const totalEmployees = managerData.reduce((s, m) => s + m.counts.employees, 0);
     const totalFeedbacks = managerData.reduce((s, m) => s + m.counts.feedbacks, 0);
     const avgEffectiveness = Math.round(managerData.reduce((s, m) => s + m.finalScore, 0) / managerData.length);
 
-    // Sort for leaderboard
     const sorted = [...managerData].sort((a, b) => b.finalScore - a.finalScore);
     const topPerformers = sorted.slice(0, 3);
     const lowPerformers = sorted.filter((m) => m.category === "Needs Improvement" || m.category === "Average");
@@ -306,7 +297,6 @@ function buildHRReportHTML(data) {
         </div></body></html>`;
 }
 
-// ── Generate Manager Report ──
 
 async function generateManagerReport(managerId) {
     const manager = await User.findById(managerId).select("-password");

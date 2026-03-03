@@ -5,41 +5,35 @@ const User = require("../models/User");
 const { authMiddleware, requireRole } = require("../middleware/auth");
 const { analyzeSentiment } = require("../services/aiSuggestionsService");
 
-// Compute composite feedback score (returns 0-1)
 function computeCompositeFeedbackScore(feedback) {
   let totalWeight = 0;
   let weightedSum = 0;
 
-  // Text sentiment (weight: 0.30)
   if (feedback.sentimentScore != null) {
     weightedSum += feedback.sentimentScore * 0.30;
     totalWeight += 0.30;
   }
 
-  // Structured ratings avg (weight: 0.25)
   if (feedback.ratings) {
     const ratingValues = Object.values(feedback.ratings).filter(v => v != null && v > 0);
     if (ratingValues.length > 0) {
       const avgRating = ratingValues.reduce((s, v) => s + v, 0) / ratingValues.length;
-      weightedSum += (avgRating - 1) / 4 * 0.25; // normalize 1-5 → 0-1
+      weightedSum += (avgRating - 1) / 4 * 0.25; //normalize
       totalWeight += 0.25;
     }
   }
 
-  // NPS (weight: 0.15)
   if (feedback.npsScore != null) {
     weightedSum += (feedback.npsScore / 10) * 0.15;
     totalWeight += 0.15;
   }
 
-  // Pulse mood (weight: 0.10)
   if (feedback.pulseMood) {
     const moodMap = { thriving: 1.0, happy: 0.75, neutral: 0.5, stressed: 0.25, struggling: 0.0 };
     weightedSum += (moodMap[feedback.pulseMood] ?? 0.5) * 0.10;
     totalWeight += 0.10;
   }
 
-  // Behavioral frequencies (weight: 0.10)
   if (feedback.oneOnOneFrequency || feedback.feedbackFrequency || feedback.concernResponseTime) {
     const freqMap = { weekly: 1.0, biweekly: 0.75, monthly: 0.5, rarely: 0.25, never: 0.0, after_every_task: 1.0, same_day: 1.0, within_week: 0.75, within_month: 0.5 };
     const freqValues = [
@@ -55,14 +49,12 @@ function computeCompositeFeedbackScore(feedback) {
     }
   }
 
-  // Peer comparison (weight: 0.10)
   if (feedback.peerComparison) {
     const peerMap = { much_better: 1.0, better: 0.75, same: 0.5, worse: 0.25, much_worse: 0.0 };
     weightedSum += (peerMap[feedback.peerComparison] ?? 0.5) * 0.10;
     totalWeight += 0.10;
   }
 
-  // Normalize for missing signals
   if (totalWeight === 0) return null;
   return Math.round((weightedSum / totalWeight) * 100) / 100;
 }
@@ -93,19 +85,17 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       return res.status(400).json({ message: "Feedback comment is required" });
     }
 
-    // Lookup employee
     const employee = await User.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // Verify manager exists
     const manager = await User.findById(managerId);
     if (!manager) {
       return res.status(404).json({ message: "Manager not found" });
     }
 
-    // Rate limit: 1 feedback per employee per week
+    //check for valid next feedback submission
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     const recentFeedback = await Feedback.findOne({
@@ -122,7 +112,6 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       });
     }
 
-    // Calculate sentiment via AI
     console.log(`📝 Analyzing sentiment for feedback from ${employee.name}...`);
     let sentimentScore;
     try {
@@ -130,10 +119,9 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       console.log(`✅ Sentiment score: ${sentimentScore}`);
     } catch (err) {
       console.error("Sentiment analysis failed, using default:", err.message);
-      sentimentScore = 0.5; // default neutral if AI fails
+      sentimentScore = 0.5;
     }
 
-    // Build feedback data
     const feedbackData = {
       fromEmployee: employee.name,
       employeeId: employee._id,
@@ -142,7 +130,6 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       managerId,
     };
 
-    // Add optional fields
     if (ratings) feedbackData.ratings = ratings;
     if (npsScore != null) feedbackData.npsScore = npsScore;
     if (feedbackCategory) feedbackData.feedbackCategory = feedbackCategory;
@@ -156,11 +143,9 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
     if (willingToFollowUp != null) feedbackData.willingToFollowUp = willingToFollowUp;
     if (urgency) feedbackData.urgency = urgency;
 
-    // Compute composite score
     feedbackData.compositeFeedbackScore = computeCompositeFeedbackScore(feedbackData);
     console.log(`📊 Composite feedback score: ${feedbackData.compositeFeedbackScore}`);
 
-    // Save feedback
     const feedback = await Feedback.create(feedbackData);
 
     res.status(201).json({
@@ -201,7 +186,7 @@ router.get("/my-feedbacks", authMiddleware, requireRole("employee"), async (req,
       Feedback.countDocuments({ employeeId: req.user.id }),
     ]);
 
-    // Attach manager name to each feedback
+    //attaching manager with his id
     const managerIds = [...new Set(feedbacks.map(f => f.managerId.toString()))];
     const managers = await User.find({ _id: { $in: managerIds } }).lean();
     const managerMap = {};
@@ -232,7 +217,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// GET /api/feedback/manager/:managerId — anonymous, paginated
+// GET /api/feedback/manager/:managerId 
 router.get("/manager/:managerId", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -241,7 +226,7 @@ router.get("/manager/:managerId", async (req, res) => {
 
     const [feedbacks, total] = await Promise.all([
       Feedback.find({ managerId: req.params.managerId })
-        .select("-fromEmployee -employeeId") // Strip employee identity
+        .select("-fromEmployee -employeeId")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),

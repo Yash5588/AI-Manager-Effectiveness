@@ -36,13 +36,11 @@ function safeParseJSONArray(text) {
   }
 }
 
-// Generate AI suggestions for a manager
 async function generateAISuggestions(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing");
   }
 
-  // Rate limit
   const now = Date.now();
   if (now - lastCallTime < MIN_DELAY_MS) {
     const wait = MIN_DELAY_MS - (now - lastCallTime);
@@ -144,7 +142,6 @@ Metrics:
 ${metricsSummary}
 `.trim();
 
-  // Model fallback chain
   const models = [
     "deepseek/deepseek-chat",
     "deepseek/deepseek-r1",
@@ -170,12 +167,10 @@ ${metricsSummary}
       const parsed = safeParseJSONArray(content);
 
       if (parsed) {
-        // Ensure strictly increasing scores
         return parsed.map((s) => {
           const current = finalScore ?? 0;
           let predicted = Number(s.predictedScore);
 
-          // Fix invalid or lower scores
           if (isNaN(predicted) || predicted <= current) {
             predicted = Math.min(100, current + Math.floor(Math.random() * 8) + 4);
           }
@@ -206,13 +201,11 @@ ${metricsSummary}
   throw new Error(msg);
 }
 
-// Generate per-employee suggestions
 async function generateEmployeeSuggestions(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing");
   }
 
-  // Rate limit
   const now = Date.now();
   if (now - lastCallTime < MIN_DELAY_MS) {
     await new Promise((r) => setTimeout(r, MIN_DELAY_MS - (now - lastCallTime)));
@@ -242,7 +235,6 @@ async function generateEmployeeSuggestions(payload) {
       ? metrics.map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}`).join("\n")
       : "No metrics on record.";
 
-  // Per-employee details
   const employeeDetails = employees
     .map((emp) => {
       const empFeedbacks = feedbacks.filter(
@@ -313,7 +305,6 @@ Employee Details:
 ${employeeDetails}
 `.trim();
 
-  // Model fallback chain
   const models = [
     "deepseek/deepseek-chat",
     "deepseek/deepseek-r1",
@@ -338,7 +329,6 @@ ${employeeDetails}
       const parsed = safeParseJSONArray(content);
 
       if (parsed) {
-        // Ensure valid predicted scores
         return parsed.map((emp) => {
           const current = finalScore ?? 0;
           let predicted = Number(emp.predictedManagerScore);
@@ -376,13 +366,11 @@ ${employeeDetails}
   throw new Error(msg);
 }
 
-// Analyze feedback sentiment
 async function analyzeSentiment(comment) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing");
   }
 
-  // Rate limit
   const now = Date.now();
   if (now - lastCallTime < MIN_DELAY_MS) {
     const wait = MIN_DELAY_MS - (now - lastCallTime);
@@ -427,7 +415,6 @@ Feedback: "${comment}"
           .replace(/```/g, "")
           .trim();
 
-        // Parse JSON
         const jsonStart = cleaned.indexOf("{");
         const jsonEnd = cleaned.lastIndexOf("}");
         if (jsonStart !== -1 && jsonEnd !== -1) {
@@ -438,7 +425,7 @@ Feedback: "${comment}"
           }
         }
 
-        // Fallback: extract number directly
+        //safe case if json not parsed
         const numMatch = cleaned.match(/0?\.\d+/);
         if (numMatch) {
           const score = Number(numMatch[0]);
@@ -451,7 +438,6 @@ Feedback: "${comment}"
     }
   }
 
-  // Default to neutral if all models fail
   console.warn("⚠️ All sentiment models failed, defaulting to 0.5");
   return 0.5;
 }
