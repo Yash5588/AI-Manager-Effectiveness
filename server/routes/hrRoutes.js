@@ -295,7 +295,7 @@ router.get("/:hrId/leaderboard", async (req, res) => {
 // POST /api/hr/:hrId/send-reports — manually trigger monthly email reports for all
 router.post("/:hrId/send-reports", async (req, res) => {
     try {
-        const { sendAllReports } = require("../schedulers/emailScheduler");
+        const { sendAllReports } = require("../schedulers/emailScheduler"); //lazy require
         await sendAllReports(req.params.hrId);
         res.json({ message: "Reports sent successfully to your managers" });
     } catch (error) {

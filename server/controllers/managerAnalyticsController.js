@@ -5,7 +5,7 @@ const PerformanceMetric = require("../models/PerformanceMetric");
 const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { generateAISuggestions, generateEmployeeSuggestions } = require("../services/aiSuggestionsService");
-const { computeAIScore } = require("../services/aiScoringService");
+
 const { predictTeamAttrition } = require("../services/attritionService");
 
 // Feedback query limits
@@ -102,7 +102,7 @@ exports.getManagerAnalytics = async (req, res) => {
       avgMetricScore: Math.round(avgMetricScore * 100) / 100,
     };
 
-    // Apply weights and compute final score
+    // Apply weights and compute formula-based score
     const weights = {
       employee: employeeWeight,
       feedback: feedbackWeight,
@@ -111,57 +111,32 @@ exports.getManagerAnalytics = async (req, res) => {
     const formulaScore = computeFinalScore(breakdown, weights);
     const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
 
-    // Fetch/compute Manager Effectiveness score (24h cache)
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    let aiResult;
+    // Read latest weekly snapshot (created by cron) for AI-enhanced score
     const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId }) || {};
-    const cachedSnapshot = await ScoreSnapshot.findOne({
+    const latestSnapshot = await ScoreSnapshot.findOne({
       managerId,
       aiScore: { $exists: true, $ne: null },
-      createdAt: { $gte: todayStart },
-    });
+    }).sort({ createdAt: -1 });
 
-    if (cachedSnapshot) {
+    let finalScore, aiResult;
+    if (latestSnapshot) {
+      finalScore = latestSnapshot.aiScore;
       aiResult = {
-        aiScore: cachedSnapshot.aiScore,
-        aiBreakdown: cachedSnapshot.aiBreakdown,
-        aiReasoning: cachedSnapshot.aiReasoning,
-        aiStrengths: cachedSnapshot.aiStrengths,
-        aiWeaknesses: cachedSnapshot.aiWeaknesses,
+        aiBreakdown: latestSnapshot.aiBreakdown,
+        aiReasoning: latestSnapshot.aiReasoning,
+        aiStrengths: latestSnapshot.aiStrengths,
+        aiWeaknesses: latestSnapshot.aiWeaknesses,
       };
     } else {
-      aiResult = await computeAIScore({
-        manager: manager.toObject ? manager.toObject() : manager,
-        employees: employees.map((e) => (e.toObject ? e.toObject() : e)),
-        feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map((f) => (f.toObject ? f.toObject() : f)),
-        metrics: metrics.map((m) => (m.toObject ? m.toObject() : m)),
-        extendedMetrics,
-        breakdown,
-        formulaScore,
-      });
-
-      // Save snapshot
-      const category = getPerformanceCategory(aiResult.aiScore);
-      await ScoreSnapshot.create({
-        managerId,
-        finalScore: aiResult.aiScore,
-        breakdown,
-        category,
-        counts,
-        aiScore: aiResult.aiScore,
-        aiBreakdown: aiResult.aiBreakdown,
-        aiReasoning: aiResult.aiReasoning,
-        aiStrengths: aiResult.aiStrengths,
-        aiWeaknesses: aiResult.aiWeaknesses,
-      });
+      // No snapshot yet — use formula score as fallback
+      finalScore = formulaScore;
+      aiResult = {};
     }
 
     const response = {
       manager: {
         ...manager.toObject ? manager.toObject() : manager,
-        effectivenessScore: aiResult.aiScore,
+        effectivenessScore: finalScore,
       },
       breakdown: {
         ...breakdown,
@@ -171,12 +146,12 @@ exports.getManagerAnalytics = async (req, res) => {
           : breakdown.avgFeedbackScore
       },
       extendedMetrics: extendedMetrics.toObject ? extendedMetrics.toObject() : extendedMetrics,
-      finalScore: aiResult.aiScore,
-      aiScore: aiResult.aiScore,
-      aiReasoning: aiResult.aiReasoning,
-      aiStrengths: aiResult.aiStrengths,
-      aiWeaknesses: aiResult.aiWeaknesses,
-      category: getPerformanceCategory(aiResult.aiScore),
+      finalScore,
+      aiScore: finalScore,
+      aiReasoning: aiResult.aiReasoning || null,
+      aiStrengths: aiResult.aiStrengths || [],
+      aiWeaknesses: aiResult.aiWeaknesses || [],
+      category: getPerformanceCategory(finalScore),
       weights,
       counts,
     };

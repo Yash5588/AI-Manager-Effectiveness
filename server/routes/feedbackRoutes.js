@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const Feedback = require("../models/Feedback");
 const User = require("../models/User");
-const ScoreSnapshot = require("../models/ScoreSnapshot");
 const { authMiddleware, requireRole } = require("../middleware/auth");
 const { analyzeSentiment } = require("../services/aiSuggestionsService");
 
@@ -163,15 +162,6 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
 
     // Save feedback
     const feedback = await Feedback.create(feedbackData);
-
-    // Invalidate today's AI cache for this manager
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    await ScoreSnapshot.deleteOne({
-      managerId,
-      createdAt: { $gte: todayStart }
-    });
-    console.log(`♻️  Invalidated AI cache for manager ${managerId} due to new feedback.`);
 
     res.status(201).json({
       message: "Feedback submitted successfully",

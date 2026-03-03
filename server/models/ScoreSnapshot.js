@@ -25,7 +25,7 @@ const ScoreSnapshotSchema = new mongoose.Schema(
             feedbacks: { type: Number, default: 0 },
             metrics: { type: Number, default: 0 },
         },
-        // Manager effectiveness score fields (cached from LLM)
+        // Manager effectiveness score fields (from AI scoring)
         aiScore: {
             type: Number,
             min: 0,

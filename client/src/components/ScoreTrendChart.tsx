@@ -388,7 +388,7 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
             {/* Footer */}
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
                 <p className="text-[11px] text-muted-foreground">
-                    {chartData.length} data points over the last {timeRangeLabels[timeRange].toLowerCase()}
+                    {chartData.length} monthly data point{chartData.length !== 1 ? "s" : ""} over the last {timeRangeLabels[timeRange].toLowerCase()}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                     {trend.direction === "up"
