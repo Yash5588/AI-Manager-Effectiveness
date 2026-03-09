@@ -108,13 +108,10 @@ async function computeAIScore(payload) {
     const extendedSummary = `
 - Team Retention Rate: ${extMetrics.teamRetentionRate ?? "N/A"}/100
 - Goal Completion Rate: ${extMetrics.goalCompletionRate ?? "N/A"}/100
-- 1-on-1 Meeting Frequency: ${extMetrics.oneOnOneFrequency ?? "N/A"}/100
-- Employee Growth Rate: ${extMetrics.employeeGrowthRate ?? "N/A"}/100
-- Response Time Score: ${extMetrics.responseTimeScore ?? "N/A"}/100
-- 360° Peer Review Score: ${extMetrics.peerReviewScore ?? "N/A"}/100
-- Project Delivery Timeliness: ${extMetrics.projectDeliveryTimeliness ?? "N/A"}/100
-- Employee Engagement Score: ${extMetrics.employeeEngagementScore ?? "N/A"}/100
-- Training & Development Investment: ${extMetrics.trainingInvestment ?? "N/A"}/100`.trim();
+- Employee Promotion Rate: ${extMetrics.employeePromotionRate ?? "N/A"}/100
+- 360° Subordinate Rating (MSF): ${extMetrics.subordinate360Rating ?? "N/A"}/100
+- Employee Engagement Score (Pulse): ${extMetrics.employeeEngagementScore ?? "N/A"}/100
+- IDP (Employees with Active Dev Goals): ${extMetrics.IDP ?? "N/A"} employees`.trim();
 
     const prompt = `
 You are an expert HR analytics engine. Compute an overall manager effectiveness score based on ALL the data below.
@@ -125,12 +122,12 @@ CRITICAL SCORING RULES:
    - Feedback Sentiment Score: ${feedbackPct}/100 (weight: ~20%)
    - KPI Metrics Score: ${metricsPct}/100 (weight: ~20%)
 
-2. The SUPPLEMENTARY signals (~40% weight, ~4.4% each) are:
+2. The SUPPLEMENTARY signals (~40% weight, ~6.7% each) are:
 ${extendedSummary}
 
 3. Read the actual feedback comments carefully — they provide qualitative context that should influence the score beyond the raw numbers.
 
-4. The formula-based score (weighted average of primary signals only) is ${formulaScore}/100. Your Manager Effectiveness score may differ by up to ±15 points based on qualitative analysis.
+4. The formula-based score (weighted average of all signals above) is ${formulaScore}/100. Your Manager Effectiveness score may differ by up to ±15 points based on qualitative analysis.
 
 STRICT OUTPUT FORMAT — Return ONLY a valid JSON object with these exact fields:
 {
@@ -141,13 +138,10 @@ STRICT OUTPUT FORMAT — Return ONLY a valid JSON object with these exact fields
     "kpiMetrics": <integer 0-100>,
     "teamRetention": <integer 0-100>,
     "goalCompletion": <integer 0-100>,
-    "oneOnOneQuality": <integer 0-100>,
-    "employeeGrowth": <integer 0-100>,
-    "responsiveness": <integer 0-100>,
-    "peerReview": <integer 0-100>,
-    "projectDelivery": <integer 0-100>,
+    "employeePromotion": <integer 0-100>,
+    "subordinate360": <integer 0-100>,
     "engagement": <integer 0-100>,
-    "trainingDevelopment": <integer 0-100>
+    "idpScore": <integer 0-100>
   },
   "reasoning": "<2-3 sentence analysis explaining the score>",
   "strengths": ["<strength1>", "<strength2>", "<strength3>"],
@@ -196,8 +190,8 @@ ${extendedSummary}
             const completion = await openRouterClient.chat.completions.create({
                 model,
                 messages: [{ role: "user", content: prompt }],
-                temperature: 0, 
-                top_p: 0.1, 
+                temperature: 0,
+                top_p: 0.1,
                 max_tokens: 800,
             });
 

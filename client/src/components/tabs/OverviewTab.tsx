@@ -16,25 +16,19 @@ const breakdownLabels: Record<string, string> = {
   kpiMetrics: "KPI Metrics",
   teamRetention: "Team Retention",
   goalCompletion: "Goal Completion",
-  oneOnOneQuality: "1-on-1 Quality",
-  employeeGrowth: "Employee Growth",
-  responsiveness: "Responsiveness",
-  peerReview: "Peer Review",
-  projectDelivery: "Project Delivery",
+  employeePromotion: "Employee Promotion",
+  subordinate360: "360° Subordinate Rating",
   engagement: "Engagement",
-  trainingDevelopment: "Training & Dev",
+  idpScore: "IDP (Dev Goals)",
 };
 
 const extendedMetricLabels: Record<string, string> = {
   teamRetentionRate: "Team Retention Rate",
   goalCompletionRate: "Goal Completion Rate",
-  oneOnOneFrequency: "1-on-1 Meeting Frequency",
-  employeeGrowthRate: "Employee Growth Rate",
-  responseTimeScore: "Response Time Score",
-  peerReviewScore: "360° Peer Review Score",
-  projectDeliveryTimeliness: "Project Delivery Timeliness",
+  employeePromotionRate: "Employee Promotion Rate",
+  subordinate360Rating: "360° Subordinate Rating",
   employeeEngagementScore: "Employee Engagement Score",
-  trainingInvestment: "Training & Dev Investment",
+  IDP: "Employees with Active Dev Goals",
 };
 
 function getBarColor(value: number): string {
@@ -45,13 +39,6 @@ function getBarColor(value: number): string {
 }
 
 const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
-  const stats = [
-    { label: "Total Employees", value: manager.totalEmployees, icon: Users, color: "text-primary" },
-    { label: "Avg Sentiment", value: `${(manager.sentimentScore * 100).toFixed(0)}%`, icon: TrendingUp, color: "text-success" },
-    { label: "Feedbacks", value: feedbacks.length, icon: MessageSquare, color: "text-accent" },
-    { label: "Manager Score", value: `${manager.effectivenessScore}%`, icon: Sparkles, color: "text-primary shadow-sm" },
-  ];
-
   const analysis = {
     sentimentScore: manager.sentimentScore,
     effectivenessScore: manager.effectivenessScore,
@@ -64,52 +51,58 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, i) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
-            className="glass-card rounded-lg p-5"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <stat.icon className={`h-5 w-5 ${stat.color}`} />
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</span>
-            </div>
-            <p className="text-2xl font-display font-bold text-foreground">{stat.value}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Gauges */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <ScoreGauge
-          label="Sentiment Score"
-          value={manager.sentimentScore}
-          max={1}
-          color={manager.sentimentScore > 0.6 ? "success" : manager.sentimentScore < 0.4 ? "destructive" : "accent"}
-        />
-        <ScoreGauge
-          label="Manager Effectiveness Score"
-          value={manager.effectivenessScore}
-          max={100}
-          color="primary"
-        />
+      {/* Gauges with embedded stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        {/* Sentiment Score Card */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="glass-card rounded-lg p-6 flex flex-col items-center justify-center"
+          transition={{ duration: 0.5 }}
+          className="glass-card rounded-lg p-6 flex flex-col items-center"
         >
-          <div className={`text-2xl font-display font-bold ${manager.sentimentLabel === "Positive" ? "text-success"
+          <ScoreGauge
+            label="Sentiment Score"
+            value={manager.sentimentScore}
+            max={1}
+            color={manager.sentimentScore > 0.6 ? "success" : manager.sentimentScore < 0.4 ? "destructive" : "accent"}
+            bare
+          />
+          <div className={`mt-1 text-lg font-display font-bold ${manager.sentimentLabel === "Positive" ? "text-success"
             : manager.sentimentLabel === "Negative" ? "text-destructive"
               : "text-accent"
             }`}>
             {manager.sentimentLabel}
           </div>
-          <span className="mt-2 text-sm font-medium text-muted-foreground">Overall Sentiment</span>
+          <div className="w-full mt-4 pt-4 border-t border-border/30 flex items-center justify-center gap-2">
+            <MessageSquare className="h-4 w-4 text-accent shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-none">Feedbacks</span>
+              <span className="text-sm font-display font-bold text-foreground leading-tight">{feedbacks.length}</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Manager Effectiveness Score Card */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="glass-card rounded-lg p-6 flex flex-col items-center"
+        >
+          <ScoreGauge
+            label="Manager Effectiveness Score"
+            value={manager.effectivenessScore}
+            max={100}
+            color="primary"
+            bare
+          />
+          <div className="w-full mt-4 pt-4 border-t border-border/30 flex items-center justify-center gap-2">
+            <Users className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-none">Total Employees</span>
+              <span className="text-sm font-display font-bold text-foreground leading-tight">{manager.totalEmployees}</span>
+            </div>
+          </div>
         </motion.div>
       </div>
 
@@ -127,7 +120,7 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
             </div>
             <div>
               <h3 className="font-display text-lg font-semibold text-foreground">AI Performance Insights</h3>
-              <p className="text-xs text-muted-foreground">Detailed reasoning based on 12 data dimensions</p>
+              <p className="text-xs text-muted-foreground">Detailed reasoning based on 6 data dimensions</p>
             </div>
           </div>
 
@@ -219,22 +212,27 @@ const OverviewTab = ({ manager, feedbacks }: OverviewTabProps) => {
           <div className="space-y-4">
             {manager.extendedMetrics && Object.entries(manager.extendedMetrics)
               .filter(([key]) => extendedMetricLabels[key] !== undefined)
-              .map(([key, value], i) => (
-                <div key={key} className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-muted-foreground">{extendedMetricLabels[key] || key}</span>
-                    <span className="text-foreground">{value}%</span>
+              .map(([key, value], i) => {
+                const isIDP = key === "IDP";
+                const displayValue = isIDP ? `${value} employees` : `${value}%`;
+                const barWidth = isIDP ? (Number(value) / 5) * 100 : Number(value);
+                return (
+                  <div key={key} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-muted-foreground">{extendedMetricLabels[key] || key}</span>
+                      <span className="text-foreground">{displayValue}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${barWidth}%` }}
+                        transition={{ duration: 0.8, delay: i * 0.05 }}
+                        className={`h-full rounded-full ${barWidth >= 80 ? 'bg-emerald-500' : barWidth >= 60 ? 'bg-primary' : 'bg-destructive'}`}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${value}%` }}
-                      transition={{ duration: 0.8, delay: i * 0.05 }}
-                      className={`h-full rounded-full ${Number(value) >= 80 ? 'bg-emerald-500' : Number(value) >= 60 ? 'bg-primary' : 'bg-destructive'}`}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             {(!manager.extendedMetrics || Object.keys(manager.extendedMetrics).filter(k => extendedMetricLabels[k]).length === 0) && (
               <p className="text-sm text-muted-foreground text-center py-8 italic">No specific KPI metrics available.</p>
             )}

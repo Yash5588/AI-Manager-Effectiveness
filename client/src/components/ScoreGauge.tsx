@@ -6,6 +6,7 @@ interface ScoreGaugeProps {
   max: number;
   suffix?: string;
   color?: "primary" | "accent" | "success" | "destructive";
+  bare?: boolean;
 }
 
 const colorMap = {
@@ -15,19 +16,24 @@ const colorMap = {
   destructive: "hsl(0, 72%, 51%)",
 };
 
-const ScoreGauge = ({ label, value, max, suffix = "", color = "primary" }: ScoreGaugeProps) => {
+const ScoreGauge = ({ label, value, max, suffix = "", color = "primary", bare = false }: ScoreGaugeProps) => {
   const percentage = (value / max) * 100;
   const circumference = 2 * Math.PI * 45;
   const offset = circumference - (percentage / 100) * circumference;
   const strokeColor = colorMap[color];
 
+  const Wrapper = bare ? "div" : motion.div;
+  const wrapperProps = bare
+    ? { className: "flex flex-col items-center" }
+    : {
+      initial: { opacity: 0, scale: 0.9 },
+      animate: { opacity: 1, scale: 1 },
+      transition: { duration: 0.5 },
+      className: "glass-card rounded-lg p-6 flex flex-col items-center score-glow",
+    };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5 }}
-      className="glass-card rounded-lg p-6 flex flex-col items-center score-glow"
-    >
+    <Wrapper {...(wrapperProps as any)}>
       <div className="relative w-28 h-28">
         <svg className="w-28 h-28 -rotate-90" viewBox="0 0 100 100">
           <circle
@@ -60,7 +66,7 @@ const ScoreGauge = ({ label, value, max, suffix = "", color = "primary" }: Score
         </div>
       </div>
       <span className="mt-3 text-sm font-medium text-muted-foreground">{label}</span>
-    </motion.div>
+    </Wrapper>
   );
 };
 

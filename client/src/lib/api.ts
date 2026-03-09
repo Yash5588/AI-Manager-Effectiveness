@@ -32,13 +32,10 @@ export interface AIScoreBreakdown {
   kpiMetrics: number;
   teamRetention: number;
   goalCompletion: number;
-  oneOnOneQuality: number;
-  employeeGrowth: number;
-  responsiveness: number;
-  peerReview: number;
-  projectDelivery: number;
+  employeePromotion: number;
+  subordinate360: number;
   engagement: number;
-  trainingDevelopment: number;
+  idpScore: number;
 }
 
 export interface Metric {
@@ -51,13 +48,10 @@ export interface Metric {
 export interface ExtendedMetrics {
   teamRetentionRate?: number;
   goalCompletionRate?: number;
-  oneOnOneFrequency?: number;
-  employeeGrowthRate?: number;
-  responseTimeScore?: number;
-  peerReviewScore?: number;
-  projectDeliveryTimeliness?: number;
+  employeePromotionRate?: number;
+  subordinate360Rating?: number;
   employeeEngagementScore?: number;
-  trainingInvestment?: number;
+  IDP?: number;
 }
 
 export interface Manager {

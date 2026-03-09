@@ -67,9 +67,10 @@ async function computeManagerSnapshot(managerId) {
         avgMetricScore: Math.round(avgMetricScore * 100) / 100,
     };
 
-    const formulaScore = Math.round(
-        (avgEmployeeScore * 0.4 + avgFeedbackScore * 0.3 + avgMetricScore * 0.3) * 100
-    );
+    const { computeExtendedScore, computeFinalScore } = require("../utils/scoring");
+    const avgExtendedScore = computeExtendedScore(extendedMetrics, employees.length);
+
+    const formulaScore = computeFinalScore(breakdown, {}, avgExtendedScore);
 
     const counts = {
         employees: employees.length,

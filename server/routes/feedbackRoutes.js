@@ -18,7 +18,7 @@ function computeCompositeFeedbackScore(feedback) {
     const ratingValues = Object.values(feedback.ratings).filter(v => v != null && v > 0);
     if (ratingValues.length > 0) {
       const avgRating = ratingValues.reduce((s, v) => s + v, 0) / ratingValues.length;
-      weightedSum += (avgRating - 1) / 4 * 0.25; //normalize
+      weightedSum += (avgRating - 1) / 4 * 0.25;
       totalWeight += 0.25;
     }
   }

@@ -4,13 +4,14 @@ const Feedback = require("../models/Feedback");
 const PerformanceMetric = require("../models/PerformanceMetric");
 const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
 const ScoreSnapshot = require("../models/ScoreSnapshot");
-const { generateAISuggestions, generateEmployeeSuggestions } = require("../services/aiSuggestionsService");
+const { computeExtendedScore, computeFinalScore } = require("../utils/scoring");
+const { getPerformanceCategory } = require("../services/reportService");
 
 const { predictTeamAttrition } = require("../services/attritionService");
 
 const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
-const FEEDBACK_SCORE_LIMIT = 50; 
-const FEEDBACK_AI_LIMIT = 20;    
+const FEEDBACK_SCORE_LIMIT = 50;
+const FEEDBACK_AI_LIMIT = 20;
 
 function getFeedbackDateFilter() {
   const cutoff = new Date();
@@ -33,22 +34,15 @@ function getPerformanceCategory(score) {
   return "Needs Improvement";
 }
 
-function computeFinalScore(breakdown, weights) {
-  const { avgEmployeeScore, avgFeedbackScore, avgMetricScore } = breakdown;
-  const { employee = 0.4, feedback = 0.3, metrics = 0.3 } = weights;
-  const raw =
-    avgEmployeeScore * employee +
-    avgFeedbackScore * feedback +
-    avgMetricScore * metrics;
-  return Math.round(raw * 100);
-}
+// Removed local computeExtendedScore and computeFinalScore logic as it is now in utils/scoring.js
 
 exports.getManagerAnalytics = async (req, res) => {
   try {
     const { managerId } = req.params;
-    const employeeWeight = parseFloat(req.query.employeeWeight) || 0.4;
-    const feedbackWeight = parseFloat(req.query.feedbackWeight) || 0.3;
-    const metricsWeight = parseFloat(req.query.metricsWeight) || 0.3;
+    const employeeWeight = parseFloat(req.query.employeeWeight) || 0.2;
+    const feedbackWeight = parseFloat(req.query.feedbackWeight) || 0.2;
+    const metricsWeight = parseFloat(req.query.metricsWeight) || 0.2;
+    const extendedWeight = parseFloat(req.query.extendedWeight) || 0.4;
 
     const manager = await User.findById(managerId);
     if (!manager) {
@@ -92,15 +86,19 @@ exports.getManagerAnalytics = async (req, res) => {
       avgMetricScore: Math.round(avgMetricScore * 100) / 100,
     };
 
+    const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId }) || {};
+    const avgExtendedScore = computeExtendedScore(extendedMetrics, employees.length);
+
     const weights = {
       employee: employeeWeight,
       feedback: feedbackWeight,
       metrics: metricsWeight,
+      extended: extendedWeight,
     };
-    const formulaScore = computeFinalScore(breakdown, weights);
+    const formulaScore = computeFinalScore(breakdown, weights, avgExtendedScore);
     const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
 
-    const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId }) || {};
+    // extendedMetrics already loaded above
     const latestSnapshot = await ScoreSnapshot.findOne({
       managerId,
       aiScore: { $exists: true, $ne: null },
@@ -193,8 +191,9 @@ exports.generateSuggestions = async (req, res) => {
       avgMetricScore: Math.round(avgMetricScore * 100) / 100,
     };
 
-    const weights = { employee: 0.4, feedback: 0.3, metrics: 0.3 };
-    const finalScore = computeFinalScore(breakdown, weights);
+    const avgExtendedScore = computeExtendedScore(extendedMetrics, employees.length);
+    const weights = { employee: 0.2, feedback: 0.2, metrics: 0.2, extended: 0.4 };
+    const finalScore = computeFinalScore(breakdown, weights, avgExtendedScore);
     const category = getPerformanceCategory(finalScore);
     const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
 
@@ -264,8 +263,9 @@ exports.generateEmployeeSuggestionsHandler = async (req, res) => {
       avgMetricScore: Math.round(avgMetricScore * 100) / 100,
     };
 
-    const weights = { employee: 0.4, feedback: 0.3, metrics: 0.3 };
-    const finalScore = computeFinalScore(breakdown, weights);
+    const avgExtendedScore = computeExtendedScore(extendedMetrics, employees.length);
+    const weights = { employee: 0.2, feedback: 0.2, metrics: 0.2, extended: 0.4 };
+    const finalScore = computeFinalScore(breakdown, weights, avgExtendedScore);
     const category = getPerformanceCategory(finalScore);
     const counts = { employees: employees.length, feedbacks: feedbacks.length, metrics: metrics.length };
 

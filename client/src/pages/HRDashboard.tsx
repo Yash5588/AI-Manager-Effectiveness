@@ -80,13 +80,10 @@ const getCategoryBg = (cat: string) => {
 const extendedMetricLabels: Record<string, string> = {
     teamRetentionRate: "Team Retention Rate",
     goalCompletionRate: "Goal Completion Rate",
-    oneOnOneFrequency: "1-on-1 Meeting Frequency",
-    employeeGrowthRate: "Employee Growth Rate",
-    responseTimeScore: "Response Time Score",
-    peerReviewScore: "360° Peer Review Score",
-    projectDeliveryTimeliness: "Project Delivery Timeliness",
+    employeePromotionRate: "Employee Promotion Rate",
+    subordinate360Rating: "360° Subordinate Rating",
     employeeEngagementScore: "Employee Engagement Score",
-    trainingInvestment: "Training & Dev Investment",
+    IDP: "Employees with Active Dev Goals",
 };
 
 function getRatingColor(rating: number) {
@@ -540,27 +537,32 @@ const HRDashboard = () => {
                                     <div className="glass-card rounded-xl p-6 lg:col-span-2">
                                         <div className="flex items-center gap-2 mb-6">
                                             <Sparkles className="h-5 w-5 text-primary" />
-                                            <h4 className="font-medium text-foreground">9-Dimension KPI Breakdown</h4>
+                                            <h4 className="font-medium text-foreground">6-Dimension KPI Breakdown</h4>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
                                             {selectedMgr?.extendedMetrics && Object.entries(selectedMgr.extendedMetrics)
                                                 .filter(([key]) => extendedMetricLabels[key] !== undefined)
-                                                .map(([key, value], i) => (
-                                                    <div key={key} className="space-y-2">
-                                                        <div className="flex justify-between text-xs font-semibold">
-                                                            <span className="text-muted-foreground">{extendedMetricLabels[key] || key}</span>
-                                                            <span className="text-foreground">{String(value)}%</span>
+                                                .map(([key, value], i) => {
+                                                    const isIDP = key === "IDP";
+                                                    const displayValue = isIDP ? `${value} employees` : `${String(value)}%`;
+                                                    const barWidth = isIDP ? (Number(value) / 5) * 100 : Number(value);
+                                                    return (
+                                                        <div key={key} className="space-y-2">
+                                                            <div className="flex justify-between text-xs font-semibold">
+                                                                <span className="text-muted-foreground">{extendedMetricLabels[key] || key}</span>
+                                                                <span className="text-foreground">{displayValue}</span>
+                                                            </div>
+                                                            <div className="h-1.5 rounded-full bg-secondary/40 overflow-hidden">
+                                                                <motion.div
+                                                                    initial={{ width: 0 }}
+                                                                    animate={{ width: `${barWidth}%` }}
+                                                                    transition={{ duration: 0.8, delay: i * 0.05 }}
+                                                                    className={`h-full rounded-full ${barWidth >= 80 ? 'bg-emerald-500' : barWidth >= 60 ? 'bg-primary' : 'bg-destructive'}`}
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div className="h-1.5 rounded-full bg-secondary/40 overflow-hidden">
-                                                            <motion.div
-                                                                initial={{ width: 0 }}
-                                                                animate={{ width: `${value}%` }}
-                                                                transition={{ duration: 0.8, delay: i * 0.05 }}
-                                                                className={`h-full rounded-full ${Number(value) >= 80 ? 'bg-emerald-500' : Number(value) >= 60 ? 'bg-primary' : 'bg-destructive'}`}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             {(!selectedMgr?.extendedMetrics || Object.keys(selectedMgr.extendedMetrics).filter(k => extendedMetricLabels[k]).length === 0) && (
                                                 <p className="text-sm text-muted-foreground text-center py-8 italic col-span-3">No specific KPI metrics available for this manager.</p>
                                             )}

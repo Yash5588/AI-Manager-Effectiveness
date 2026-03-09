@@ -20,48 +20,32 @@ const ManagerExtendedMetricsSchema = new mongoose.Schema(
             max: 100,
             required: true,
         },
-        oneOnOneFrequency: {
+        employeePromotionRate: {
             type: Number,
             min: 0,
             max: 100,
             required: true,
         },
-        employeeGrowthRate: {
+        //MSF 360 degree feedback process
+        subordinate360Rating: {
             type: Number,
             min: 0,
             max: 100,
             required: true,
         },
-        responseTimeScore: {
-            type: Number,
-            min: 0,
-            max: 100,
-            required: true,
-        },
-        peerReviewScore: {
-            type: Number,
-            min: 0,
-            max: 100,
-            required: true,
-        },
-        projectDeliveryTimeliness: {
-            type: Number,
-            min: 0,
-            max: 100,
-            required: true,
-        },
+        //pulse:  vibe module
         employeeEngagementScore: {
             type: Number,
             min: 0,
             max: 100,
             required: true,
         },
-        trainingInvestment: {
+        // IDP: count of employees with at least one active development goal (must be >= 1)
+        IDP: {
             type: Number,
-            min: 0,
-            max: 100,
+            min: 1,
             required: true,
-        },
+        }
     },
     { timestamps: true }
 );

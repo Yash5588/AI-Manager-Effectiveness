@@ -71,9 +71,10 @@ async function computeManagerAnalytics(managerId) {
             }
         }
     } else {
-        finalScore = Math.round(
-            (avgEmployeeScore * 0.4 + avgFeedbackScore * 0.3 + avgMetricScore * 0.3) * 100
-        );
+        const { computeExtendedScore, computeFinalScore } = require("../utils/scoring");
+        const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId }) || {};
+        const avgExtendedScore = computeExtendedScore(extendedMetrics, employees.length);
+        finalScore = computeFinalScore(breakdown, {}, avgExtendedScore);
     }
 
     const category = getPerformanceCategory(finalScore);
