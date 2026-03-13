@@ -1,102 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
-
 router.get("/test", (req, res) => res.json({ message: "HR Routes are alive!" }));
 const Feedback = require("../models/Feedback");
-const PerformanceMetric = require("../models/PerformanceMetric");
-const ScoreSnapshot = require("../models/ScoreSnapshot");
-const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
-
-function normalizeEmployeeScore(rating) {
-    return (rating - 1) / 4;
-}
-function normalizeMetricValue(value) {
-    return Math.min(1, Math.max(0, value / 100));
-}
-function getPerformanceCategory(score) {
-    if (score >= 85) return "Excellent";
-    if (score >= 70) return "Good";
-    if (score >= 50) return "Average";
-    return "Needs Improvement";
-}
-
-const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS) || 90;
-const FEEDBACK_SCORE_LIMIT = 50;
-
-function getFeedbackDateFilter() {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - FEEDBACK_WINDOW_DAYS);
-    return { createdAt: { $gte: cutoff } };
-}
-
-async function computeManagerAnalytics(managerId) {
-    const mongoose = require("mongoose");
-    const [employees, latestFeedbacks, metrics, latestSnapshot, extendedMetrics] = await Promise.all([
-        User.find({ managerId, userType: "employee" }),
-        Feedback.aggregate([
-            { $match: { managerId: new mongoose.Types.ObjectId(managerId), ...getFeedbackDateFilter() } },
-            { $sort: { createdAt: -1 } },
-            { $group: { _id: "$employeeId", doc: { $first: "$$ROOT" } } },
-            { $replaceRoot: { newRoot: "$doc" } },
-            { $sort: { createdAt: -1 } },
-        ]),
-        PerformanceMetric.find({ managerId }),
-        ScoreSnapshot.findOne({ managerId, aiScore: { $exists: true } }).sort({ createdAt: -1 }),
-        ManagerExtendedMetrics.findOne({ managerId }),
-    ]);
-
-    const feedbacks = latestFeedbacks;
-
-    const avgEmployeeScore =
-        employees.length > 0
-            ? employees.reduce((s, e) => s + normalizeEmployeeScore(e.performanceRating), 0) / employees.length
-            : 0.5;
-    const avgFeedbackScore =
-        feedbacks.length > 0
-            ? feedbacks.reduce((s, f) => s + (f.compositeFeedbackScore ?? f.sentimentScore ?? 0.5), 0) / feedbacks.length
-            : 0.5;
-    const avgMetricScore =
-        metrics.length > 0
-            ? metrics.reduce((s, m) => s + normalizeMetricValue(m.value), 0) / metrics.length
-            : 0.5;
-
-    let breakdown = {
-        avgEmployeeScore: Math.round(avgEmployeeScore * 100) / 100,
-        avgFeedbackScore: Math.round(avgFeedbackScore * 100) / 100,
-        avgMetricScore: Math.round(avgMetricScore * 100) / 100,
-    };
-
-    let finalScore;
-    if (latestSnapshot) {
-        finalScore = latestSnapshot.aiScore;
-        if (latestSnapshot.aiBreakdown) {
-            breakdown = { ...breakdown, ...latestSnapshot.aiBreakdown };
-            if (latestSnapshot.aiBreakdown.feedbackSentiment !== undefined) {
-                breakdown.avgFeedbackScore = latestSnapshot.aiBreakdown.feedbackSentiment / 100;
-            }
-        }
-    } else {
-        const { computeExtendedScore, computeFinalScore } = require("../utils/scoring");
-        const extendedMetrics = await ManagerExtendedMetrics.findOne({ managerId }) || {};
-        const avgExtendedScore = computeExtendedScore(extendedMetrics, employees.length);
-        finalScore = computeFinalScore(breakdown, {}, avgExtendedScore);
-    }
-
-    const category = getPerformanceCategory(finalScore);
-
-    return {
-        breakdown,
-        extendedMetrics: extendedMetrics ? (extendedMetrics.toObject ? extendedMetrics.toObject() : extendedMetrics) : {},
-        finalScore,
-        category,
-        counts: {
-            employees: employees.length,
-            feedbacks: feedbacks.length,
-            metrics: metrics.length,
-        },
-    };
-}
+const {
+    computeManagerAnalytics,
+    computeRecentTrend,
+} = require("../services/managerAnalyticsService");
 
 // GET /api/hr/:hrId/managers — returns all managers assigned to this HR with analytics
 router.get("/:hrId/managers", async (req, res) => {
@@ -249,20 +159,7 @@ router.get("/:hrId/leaderboard", async (req, res) => {
         const leaderboard = await Promise.all(
             managers.map(async (mgr) => {
                 const analytics = await computeManagerAnalytics(mgr._id);
-
-                const twoMonthsAgo = new Date();
-                twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-                const recentSnapshots = await ScoreSnapshot.find({
-                    managerId: mgr._id,
-                    createdAt: { $gte: twoMonthsAgo },
-                }).sort({ createdAt: 1 });
-
-                let trend = 0;
-                if (recentSnapshots.length >= 2) {
-                    trend =
-                        recentSnapshots[recentSnapshots.length - 1].finalScore -
-                        recentSnapshots[0].finalScore;
-                }
+                const trend = await computeRecentTrend(mgr._id, 2);
 
                 return {
                     id: mgr._id,

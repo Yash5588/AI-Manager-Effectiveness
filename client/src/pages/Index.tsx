@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Lightbulb, UserCheck, Loader2, ChevronDown, LogOut, UserMinus } from "lucide-react";
+import { LayoutDashboard, Users, Lightbulb, UserCheck, Loader2, ChevronDown, LogOut, Trophy } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OverviewTab from "@/components/tabs/OverviewTab";
 import EmployeesTab from "@/components/tabs/EmployeesTab";
 import SuggestionsTab from "@/components/tabs/SuggestionsTab";
 import EmployeeSuggestionsTab from "@/components/tabs/EmployeeSuggestionsTab";
-import AttritionRiskTab from "@/components/tabs/AttritionRiskTab";
+import LeaderboardTab from "@/components/tabs/LeaderboardTab";
+
 import {
   fetchManager,
   fetchEmployees,
@@ -16,13 +17,18 @@ import {
   fetchAISuggestions,
   fetchEmployeeSuggestions,
   fetchAttritionPredictions,
+  fetchEmployeeCoaching,
+  fetchManagerLeaderboard,
   type Manager,
+  type LeaderboardEntry,
   type Employee,
   type Feedback,
   type Metric,
   type AISuggestion,
   type EmployeeSuggestion,
   type AttritionPrediction,
+  type EmployeeCoachingProfile,
+  type TeamCoachingMetrics,
 } from "@/lib/api";
 import {
   DropdownMenu,
@@ -46,6 +52,11 @@ const Index = () => {
   const [attritionPredictions, setAttritionPredictions] = useState<AttritionPrediction[]>([]);
   const [attritionLoading, setAttritionLoading] = useState(false);
   const [metrics, setMetrics] = useState<Metric[]>([]);
+  const [coachingProfiles, setCoachingProfiles] = useState<EmployeeCoachingProfile[]>([]);
+  const [teamMetrics, setTeamMetrics] = useState<TeamCoachingMetrics | null>(null);
+  const [coachingLoading, setCoachingLoading] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
   // 1. Load data for the logged in manager
   useEffect(() => {
@@ -59,6 +70,8 @@ const Index = () => {
     setEmployeeSuggestions([]);
     setSuggestions([]);
     setAttritionPredictions([]);
+    setCoachingProfiles([]);
+    setTeamMetrics(null);
     try {
       const mgr = await fetchManager(managerId);
       setManager(mgr);
@@ -73,17 +86,47 @@ const Index = () => {
       setFeedbacks(fbs);
       setMetrics(mtr);
 
-      // Load AI suggestions separately (non-blocking, graceful failure)
-      try {
-        setSugsLoading(true);
-        const sugs = await fetchAISuggestions(mgr.id);
-        setSuggestions(sugs);
-      } catch (sugErr) {
-        console.warn("AI suggestions failed (API key issue?):", sugErr);
-        setSuggestions([]);
-      } finally {
-        setSugsLoading(false);
-      }
+      // Load AI suggestions + coaching data in parallel (non-blocking)
+      const suggestionsPromise = (async () => {
+        try {
+          setSugsLoading(true);
+          const sugs = await fetchAISuggestions(mgr.id);
+          setSuggestions(sugs);
+        } catch (sugErr) {
+          console.warn("AI suggestions failed (API key issue?):", sugErr);
+          setSuggestions([]);
+        } finally {
+          setSugsLoading(false);
+        }
+      })();
+
+      const coachingPromise = (async () => {
+        try {
+          setCoachingLoading(true);
+          const coaching = await fetchEmployeeCoaching(mgr.id);
+          setCoachingProfiles(coaching.employees);
+          setTeamMetrics(coaching.teamMetrics);
+        } catch (coachErr) {
+          console.warn("Employee coaching data failed:", coachErr);
+        } finally {
+          setCoachingLoading(false);
+        }
+      })();
+
+      const leaderboardPromise = (async () => {
+        try {
+          setLeaderboardLoading(true);
+          const lb = await fetchManagerLeaderboard(managerId);
+          setLeaderboard(lb);
+        } catch (lbErr) {
+          console.warn("Leaderboard data failed:", lbErr);
+          setLeaderboard([]);
+        } finally {
+          setLeaderboardLoading(false);
+        }
+      })();
+
+      await Promise.all([suggestionsPromise, coachingPromise, leaderboardPromise]);
     } catch (e) {
       console.error("Failed to load manager details:", e);
     } finally {
@@ -143,7 +186,7 @@ const Index = () => {
     { id: "employees", label: "Employees", icon: Users },
     { id: "suggestions", label: "AI Suggestions", icon: Lightbulb },
     { id: "employee-suggestions", label: "Employee Coaching", icon: UserCheck },
-    { id: "attrition", label: "Attrition Risk", icon: UserMinus },
+    { id: "leaderboard", label: "Leaderboard", icon: Trophy },
   ];
 
   return (
@@ -224,17 +267,23 @@ const Index = () => {
             </TabsContent>
             <TabsContent value="employee-suggestions">
               <EmployeeSuggestionsTab
+                coachingProfiles={coachingProfiles}
+                teamMetrics={teamMetrics}
                 employeeSuggestions={employeeSuggestions}
                 currentScore={manager.effectivenessScore}
                 loading={empSugLoading}
+                coachingLoading={coachingLoading}
                 onGenerate={handleGenerateEmployeeSuggestions}
+                attritionPredictions={attritionPredictions}
+                attritionLoading={attritionLoading}
+                onGenerateAttrition={handleGenerateAttrition}
               />
             </TabsContent>
-            <TabsContent value="attrition">
-              <AttritionRiskTab
-                predictions={attritionPredictions}
-                loading={attritionLoading}
-                onGenerate={handleGenerateAttrition}
+            <TabsContent value="leaderboard">
+              <LeaderboardTab
+                leaderboard={leaderboard}
+                currentManagerId={manager.id}
+                loading={leaderboardLoading}
               />
             </TabsContent>
           </Tabs>

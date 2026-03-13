@@ -3,6 +3,9 @@ import { motion } from "framer-motion";
 import {
     AreaChart,
     Area,
+    LineChart,
+    Line,
+    Legend,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -10,12 +13,20 @@ import {
     ResponsiveContainer,
     ReferenceLine,
 } from "recharts";
-import { TrendingUp, TrendingDown, Minus, Calendar, Loader2 } from "lucide-react";
-import { fetchScoreSnapshots, type ScoreSnapshot } from "@/lib/api";
+import { TrendingUp, TrendingDown, Minus, Calendar, Loader2, Trophy, Target, Users, Flame } from "lucide-react";
+import {
+    fetchScoreSnapshots,
+    fetchPeerTrendBenchmark,
+    fetchManagerLeaderboard,
+    type ScoreSnapshot,
+    type PeerTrendBenchmark,
+} from "@/lib/api";
+import { buildPeerFallbackBenchmark } from "@/lib/peerTrendBenchmark";
 
 interface ScoreTrendChartProps {
     managerId: string;
     currentScore: number;
+    showPeerComparison?: boolean;
 }
 
 type TimeRange = "3m" | "6m" | "12m";
@@ -82,18 +93,69 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     );
 };
 
-const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
+const peerLineStyles: Record<string, { stroke: string; strokeWidth: number; strokeDasharray?: string }> = {
+    self: { stroke: "hsl(var(--primary))", strokeWidth: 3 },
+    top: { stroke: "#f59e0b", strokeWidth: 2.5 },
+    above: { stroke: "#22c55e", strokeWidth: 2 },
+    below: { stroke: "#0ea5e9", strokeWidth: 2 },
+    peer_avg: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 2, strokeDasharray: "6 4" },
+};
+
+const tierBadgeStyles: Record<string, string> = {
+    Champion: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+    Elite: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+    Contender: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+    Rising: "bg-secondary text-muted-foreground border-border",
+};
+
+const PeerTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+
+    const rows = payload
+        .filter((p: any) => typeof p.value === "number")
+        .sort((a: any, b: any) => (b.value ?? 0) - (a.value ?? 0));
+
+    if (rows.length === 0) return null;
+
+    return (
+        <div className="rounded-xl bg-card/95 backdrop-blur-md border border-border shadow-xl px-4 py-3 min-w-[220px]">
+            <p className="text-[11px] font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Calendar className="h-3 w-3" />
+                {label}
+            </p>
+            <div className="space-y-1.5">
+                {rows.map((row: any) => (
+                    <div key={row.dataKey} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ backgroundColor: row.stroke }}
+                            />
+                            <span className="text-xs text-foreground truncate">{row.name}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-foreground">{row.value}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const ScoreTrendChart = ({ managerId, currentScore, showPeerComparison = false }: ScoreTrendChartProps) => {
     const [snapshots, setSnapshots] = useState<ScoreSnapshot[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [timeRange, setTimeRange] = useState<TimeRange>("12m");
+    const [peerBenchmark, setPeerBenchmark] = useState<PeerTrendBenchmark | null>(null);
+    const [peerLoading, setPeerLoading] = useState(false);
+    const [peerError, setPeerError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!managerId) return;
         setLoading(true);
         setError(null);
 
-        const months = parseInt(timeRange);
+        const months = parseInt(timeRange, 10);
         fetchScoreSnapshots(managerId, months)
             .then((data) => {
                 setSnapshots(data);
@@ -104,6 +166,38 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
             })
             .finally(() => setLoading(false));
     }, [managerId, timeRange]);
+
+    useEffect(() => {
+        if (!showPeerComparison || !managerId) {
+            setPeerBenchmark(null);
+            setPeerError(null);
+            return;
+        }
+
+        const months = parseInt(timeRange, 10);
+        setPeerLoading(true);
+        setPeerError(null);
+
+        fetchPeerTrendBenchmark(managerId, months)
+            .then((data) => {
+                setPeerBenchmark(data);
+            })
+            .catch(async (err) => {
+                console.error("Failed to load peer trend benchmark:", err);
+                try {
+                    const leaderboard = await fetchManagerLeaderboard(managerId);
+                    const fallback = buildPeerFallbackBenchmark(leaderboard, managerId, months, currentScore);
+                    setPeerBenchmark(fallback);
+                    setPeerError(null);
+                } catch (fallbackErr) {
+                    console.error("Fallback leaderboard fetch failed:", fallbackErr);
+                    const selfOnlyFallback = buildPeerFallbackBenchmark([], managerId, months, currentScore);
+                    setPeerBenchmark(selfOnlyFallback);
+                    setPeerError(null);
+                }
+            })
+            .finally(() => setPeerLoading(false));
+    }, [managerId, timeRange, showPeerComparison, currentScore]);
 
     // Transform data for chart
     const chartData = useMemo(() => {
@@ -162,6 +256,40 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
         return [Math.max(0, minScore - pad), Math.min(100, maxScore + pad)];
     }, [minScore, maxScore]);
 
+    const peerSummary = peerBenchmark?.summary ?? null;
+    const peerSeries = peerBenchmark?.series ?? [];
+
+    const peerChartData = useMemo(() => {
+        if (peerSeries.length === 0) return [];
+
+        return peerSeries[0].points.map((point, index) => {
+            const row: Record<string, string | number | null> = {
+                label: point.label,
+                monthKey: point.monthKey,
+            };
+
+            peerSeries.forEach((series) => {
+                row[series.key] = series.points[index]?.score ?? null;
+            });
+
+            return row;
+        });
+    }, [peerSeries]);
+
+    const standingText = useMemo(() => {
+        if (!peerSummary) return "";
+        if (peerSummary.rank === 1) {
+            if (peerSummary.belowManagerName && peerSummary.scoreLeadOverBelow > 0) {
+                return `${peerSummary.scoreLeadOverBelow} pts ahead of ${peerSummary.belowManagerName}`;
+            }
+            return "You are currently leading your peer group";
+        }
+        if (peerSummary.nextManagerName && peerSummary.scoreGapToNext > 0) {
+            return `${peerSummary.scoreGapToNext} pts behind ${peerSummary.nextManagerName}`;
+        }
+        return `You are ranked #${peerSummary.rank} of ${peerSummary.totalPeers}`;
+    }, [peerSummary]);
+
     if (loading) {
         return (
             <motion.div
@@ -182,28 +310,7 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
         );
     }
 
-    if (error || chartData.length === 0) {
-        return (
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-card rounded-xl p-6"
-            >
-                <div className="flex items-center gap-3 mb-4">
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                    <h3 className="font-display text-lg font-semibold text-foreground">
-                        Score Trend
-                    </h3>
-                </div>
-                <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground">
-                    <Calendar className="h-8 w-8 mb-2 opacity-40" />
-                    <p className="text-sm">
-                        {error || "No historical data yet. Score trends will appear as data accumulates."}
-                    </p>
-                </div>
-            </motion.div>
-        );
-    }
+    const hasMainTrendData = !error && chartData.length > 0;
 
     const TrendIcon =
         trend.direction === "up"
@@ -266,136 +373,266 @@ const ScoreTrendChart = ({ managerId, currentScore }: ScoreTrendChartProps) => {
                 </div>
             </div>
 
-            {/* Stats row */}
-            <div className="grid grid-cols-4 gap-3 mb-5">
-                {/* Trend change */}
-                <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border ${trendBg}`}>
-                    <TrendIcon className={`h-4 w-4 ${trendColor}`} />
-                    <div>
-                        <p className={`text-sm font-bold ${trendColor}`}>
-                            {trend.change > 0 ? "+" : ""}
-                            {trend.change}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">Change</p>
+            {hasMainTrendData ? (
+                <>
+                    {/* Stats row */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                        {/* Trend change */}
+                        <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border ${trendBg}`}>
+                            <TrendIcon className={`h-4 w-4 ${trendColor}`} />
+                            <div>
+                                <p className={`text-sm font-bold ${trendColor}`}>
+                                    {trend.change > 0 ? "+" : ""}
+                                    {trend.change}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">Change</p>
+                            </div>
+                        </div>
+                        {/* Current */}
+                        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                            <div>
+                                <p className="text-sm font-bold text-foreground">{currentScore}</p>
+                                <p className="text-[10px] text-muted-foreground">Current</p>
+                            </div>
+                        </div>
+                        {/* Average */}
+                        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary/60 border border-border">
+                            <div>
+                                <p className="text-sm font-bold text-foreground">{avgScore}</p>
+                                <p className="text-[10px] text-muted-foreground">Average</p>
+                            </div>
+                        </div>
+                        {/* Range */}
+                        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary/60 border border-border">
+                            <div>
+                                <p className="text-sm font-bold text-foreground">
+                                    {minScore}–{maxScore}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">Range</p>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                {/* Current */}
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                    <div>
-                        <p className="text-sm font-bold text-foreground">{currentScore}</p>
-                        <p className="text-[10px] text-muted-foreground">Current</p>
-                    </div>
-                </div>
-                {/* Average */}
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary/60 border border-border">
-                    <div>
-                        <p className="text-sm font-bold text-foreground">{avgScore}</p>
-                        <p className="text-[10px] text-muted-foreground">Average</p>
-                    </div>
-                </div>
-                {/* Range */}
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary/60 border border-border">
-                    <div>
-                        <p className="text-sm font-bold text-foreground">
-                            {minScore}–{maxScore}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">Range</p>
-                    </div>
-                </div>
-            </div>
 
-            {/* Chart */}
-            <div className="h-[260px] -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                        data={chartData}
-                        margin={{ top: 5, right: 10, left: -15, bottom: 0 }}
-                    >
-                        <defs>
-                            <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
-                                <stop
-                                    offset="0%"
-                                    stopColor="hsl(var(--primary))"
-                                    stopOpacity={0.3}
+                    {/* Chart */}
+                    <div className="h-[260px] -mx-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart
+                                data={chartData}
+                                margin={{ top: 5, right: 10, left: -15, bottom: 0 }}
+                            >
+                                <defs>
+                                    <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
+                                        <stop
+                                            offset="0%"
+                                            stopColor="hsl(var(--primary))"
+                                            stopOpacity={0.3}
+                                        />
+                                        <stop
+                                            offset="100%"
+                                            stopColor="hsl(var(--primary))"
+                                            stopOpacity={0.02}
+                                        />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid
+                                    strokeDasharray="3 3"
+                                    stroke="hsl(var(--border))"
+                                    vertical={false}
                                 />
-                                <stop
-                                    offset="100%"
-                                    stopColor="hsl(var(--primary))"
-                                    stopOpacity={0.02}
+                                <XAxis
+                                    dataKey="date"
+                                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                                    axisLine={{ stroke: "hsl(var(--border))" }}
+                                    tickLine={false}
+                                    interval="preserveStartEnd"
                                 />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="hsl(var(--border))"
-                            vertical={false}
-                        />
-                        <XAxis
-                            dataKey="date"
-                            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                            axisLine={{ stroke: "hsl(var(--border))" }}
-                            tickLine={false}
-                            interval="preserveStartEnd"
-                        />
-                        <YAxis
-                            domain={yDomain}
-                            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                            axisLine={false}
-                            tickLine={false}
-                            tickCount={5}
-                        />
-                        <Tooltip
-                            content={<CustomTooltip />}
-                            cursor={{
-                                stroke: "hsl(var(--primary))",
-                                strokeWidth: 1,
-                                strokeDasharray: "4 4",
-                            }}
-                        />
-                        {/* Average reference line */}
-                        <ReferenceLine
-                            y={avgScore}
-                            stroke="hsl(var(--muted-foreground))"
-                            strokeDasharray="6 4"
-                            strokeOpacity={0.4}
-                            label={{
-                                value: `Avg: ${avgScore}`,
-                                position: "right",
-                                fill: "hsl(var(--muted-foreground))",
-                                fontSize: 10,
-                            }}
-                        />
-                        <Area
-                            type="monotone"
-                            dataKey="finalScore"
-                            stroke="hsl(var(--primary))"
-                            strokeWidth={2.5}
-                            fill="url(#scoreFill)"
-                            dot={false}
-                            activeDot={{
-                                r: 5,
-                                fill: "hsl(var(--primary))",
-                                stroke: "hsl(var(--card))",
-                                strokeWidth: 2,
-                            }}
-                            animationDuration={800}
-                            animationEasing="ease-out"
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
+                                <YAxis
+                                    domain={yDomain}
+                                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickCount={5}
+                                />
+                                <Tooltip
+                                    content={<CustomTooltip />}
+                                    cursor={{
+                                        stroke: "hsl(var(--primary))",
+                                        strokeWidth: 1,
+                                        strokeDasharray: "4 4",
+                                    }}
+                                />
+                                {/* Average reference line */}
+                                <ReferenceLine
+                                    y={avgScore}
+                                    stroke="hsl(var(--muted-foreground))"
+                                    strokeDasharray="6 4"
+                                    strokeOpacity={0.4}
+                                    label={{
+                                        value: `Avg: ${avgScore}`,
+                                        position: "right",
+                                        fill: "hsl(var(--muted-foreground))",
+                                        fontSize: 10,
+                                    }}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="finalScore"
+                                    stroke="hsl(var(--primary))"
+                                    strokeWidth={2.5}
+                                    fill="url(#scoreFill)"
+                                    dot={false}
+                                    activeDot={{
+                                        r: 5,
+                                        fill: "hsl(var(--primary))",
+                                        stroke: "hsl(var(--card))",
+                                        strokeWidth: 2,
+                                    }}
+                                    animationDuration={800}
+                                    animationEasing="ease-out"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </>
+            ) : (
+                <div className="flex flex-col items-center justify-center h-[220px] text-muted-foreground border border-border/60 rounded-lg bg-secondary/20 mb-1">
+                    <Calendar className="h-8 w-8 mb-2 opacity-40" />
+                    <p className="text-sm text-center px-4">
+                        {error || "No historical trend snapshots yet for your timeline."}
+                    </p>
+                </div>
+            )}
+
+            {showPeerComparison && (
+                <div className="mt-5 pt-5 border-t border-border/50 space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <h4 className="font-display text-base font-semibold text-foreground">
+                                Peer Arena
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                                Compare your trend against nearby and top peers
+                            </p>
+                        </div>
+                        {peerSummary && (
+                            <span className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold ${tierBadgeStyles[peerSummary.tier] || tierBadgeStyles.Rising}`}>
+                                {peerSummary.tier} Tier
+                            </span>
+                        )}
+                    </div>
+
+                    {peerLoading ? (
+                        <div className="flex items-center justify-center h-[180px]">
+                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        </div>
+                    ) : peerError || !peerSummary || peerChartData.length === 0 ? (
+                        <div className="rounded-lg border border-border bg-secondary/20 px-4 py-8 text-center">
+                            <p className="text-xs text-muted-foreground">
+                                {peerError || "Peer trend data is not available yet."}
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                                <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Rank</p>
+                                    <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                                        <Trophy className="h-3.5 w-3.5 text-amber-400" />
+                                        #{peerSummary.rank}/{peerSummary.totalPeers}
+                                    </p>
+                                </div>
+                                <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Top Percentile</p>
+                                    <p className="text-sm font-bold text-foreground">{peerSummary.topPercentile}%</p>
+                                </div>
+                                <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Gap To Top</p>
+                                    <p className="text-sm font-bold text-foreground">{peerSummary.scoreGapToTop}</p>
+                                </div>
+                                <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Lead/Streak</p>
+                                    <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                                        <Users className="h-3.5 w-3.5 text-primary" />
+                                        {peerSummary.rank === 1 ? `+${peerSummary.scoreLeadOverBelow}` : `-${peerSummary.scoreGapToNext}`}
+                                    </p>
+                                </div>
+                                <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Above Avg Streak</p>
+                                    <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                                        <Flame className="h-3.5 w-3.5 text-orange-400" />
+                                        {peerSummary.abovePeerAverageStreak} mo
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border border-border bg-card/50 px-3 py-3">
+                                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
+                                    <Target className="h-3.5 w-3.5 text-primary" />
+                                    {standingText}
+                                </p>
+                                <div className="h-[220px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart
+                                            data={peerChartData}
+                                            margin={{ top: 10, right: 8, left: -12, bottom: 0 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                                            <XAxis
+                                                dataKey="label"
+                                                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                                                axisLine={{ stroke: "hsl(var(--border))" }}
+                                                tickLine={false}
+                                                interval="preserveStartEnd"
+                                            />
+                                            <YAxis
+                                                domain={[0, 100]}
+                                                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tickCount={5}
+                                            />
+                                            <Tooltip content={<PeerTooltip />} />
+                                            <Legend verticalAlign="top" align="right" iconType="line" wrapperStyle={{ fontSize: "11px" }} />
+                                            {peerSeries.map((series) => {
+                                                const style = peerLineStyles[series.key] || peerLineStyles.peer_avg;
+                                                return (
+                                                    <Line
+                                                        key={series.key}
+                                                        type="monotone"
+                                                        dataKey={series.key}
+                                                        name={series.name}
+                                                        stroke={style.stroke}
+                                                        strokeWidth={style.strokeWidth}
+                                                        strokeDasharray={style.strokeDasharray}
+                                                        dot={false}
+                                                        connectNulls
+                                                        activeDot={{ r: 4, strokeWidth: 0 }}
+                                                        animationDuration={700}
+                                                    />
+                                                );
+                                            })}
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
 
             {/* Footer */}
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
                 <p className="text-[11px] text-muted-foreground">
-                    {chartData.length} monthly data point{chartData.length !== 1 ? "s" : ""} over the last {timeRangeLabels[timeRange].toLowerCase()}
+                    {hasMainTrendData
+                        ? `${chartData.length} monthly data point${chartData.length !== 1 ? "s" : ""} over the last ${timeRangeLabels[timeRange].toLowerCase()}`
+                        : `Trend timeline: ${timeRangeLabels[timeRange].toLowerCase()}`}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                    {trend.direction === "up"
+                    {hasMainTrendData && trend.direction === "up"
                         ? `📈 Improving (+${trend.percentage}%)`
-                        : trend.direction === "down"
+                        : hasMainTrendData && trend.direction === "down"
                             ? `📉 Declining (${trend.percentage}%)`
-                            : "➡️ Stable"}
+                            : "Waiting for trend history"}
                 </p>
             </div>
         </motion.div>

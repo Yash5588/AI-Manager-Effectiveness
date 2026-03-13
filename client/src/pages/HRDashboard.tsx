@@ -3,61 +3,51 @@ import { useNavigate } from "react-router-dom";
 import {
     LayoutDashboard,
     Network,
-    Trophy,
-    Lightbulb,
     LogOut,
     Loader2,
     Users,
-    TrendingUp,
-    BarChart3,
-    MessageSquare,
-    ChevronDown,
     Star,
-    ArrowUpRight,
-    ArrowDownRight,
-    Minus,
-    Building2,
-    User,
     Sparkles,
+    Building2,
+    MoreHorizontal,
+    Eye,
+    Lightbulb,
     UserMinus,
     Mail,
+    Bot,
     CheckCircle,
+    Send,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import ScoreGauge from "@/components/ScoreGauge";
-import ScoreTrendChart from "@/components/ScoreTrendChart";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
     fetchHROverview,
     fetchHRManagers,
     fetchHierarchy,
-    fetchLeaderboard,
     fetchAISuggestions,
-    fetchEmployees,
-    fetchFeedbacks,
     fetchAttritionPredictions,
     sendReports,
     sendManagerReport,
     type HROverview,
     type HRManager,
     type HierarchyData,
-    type LeaderboardEntry,
     type AISuggestion,
-    type Employee,
-    type Feedback,
     type AttritionPrediction,
 } from "@/lib/api";
-import AttritionRiskTab from "@/components/tabs/AttritionRiskTab";
+import ManagerDetailModal from "@/components/modals/ManagerDetailModal";
+import SuggestionsModal from "@/components/modals/SuggestionsModal";
+import AttritionModal from "@/components/modals/AttritionModal";
 
-// ─── Helper components ───
-
-function getSentimentLabel(score: number): "Positive" | "Neutral" | "Negative" {
-    if (score >= 0.6) return "Positive";
-    if (score <= 0.4) return "Negative";
-    return "Neutral";
-}
+// ─── Helpers ───
 
 function getCategoryColor(category: string) {
     switch (category) {
@@ -77,15 +67,6 @@ const getCategoryBg = (cat: string) => {
     }
 };
 
-const extendedMetricLabels: Record<string, string> = {
-    teamRetentionRate: "Team Retention Rate",
-    goalCompletionRate: "Goal Completion Rate",
-    employeePromotionRate: "Employee Promotion Rate",
-    subordinate360Rating: "360° Subordinate Rating",
-    employeeEngagementScore: "Employee Engagement Score",
-    IDP: "Employees with Active Dev Goals",
-};
-
 function getRatingColor(rating: number) {
     if (rating >= 4) return "text-emerald-400";
     if (rating >= 3) return "text-amber-400";
@@ -101,20 +82,21 @@ const HRDashboard = () => {
     const [overview, setOverview] = useState<HROverview | null>(null);
     const [managers, setManagers] = useState<HRManager[]>([]);
     const [hierarchy, setHierarchy] = useState<HierarchyData | null>(null);
-    const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-    const [selectedManager, setSelectedManager] = useState<string | null>(null);
+
+    // Modal state
+    const [detailManager, setDetailManager] = useState<HRManager | null>(null);
+    const [suggestionsManager, setSuggestionsManager] = useState<HRManager | null>(null);
+    const [attritionManager, setAttritionManager] = useState<HRManager | null>(null);
+
+    // AI state
     const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
     const [sugsLoading, setSugsLoading] = useState(false);
     const [attritionPredictions, setAttritionPredictions] = useState<AttritionPrediction[]>([]);
     const [attritionLoading, setAttritionLoading] = useState(false);
+
+    // Reports
     const [reportsLoading, setReportsLoading] = useState(false);
     const [reportsSuccess, setReportsSuccess] = useState<string | null>(null);
-
-    // Deep dive data
-    const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
-    const [selectedFeedbacks, setSelectedFeedbacks] = useState<Feedback[]>([]);
-    const [detailsLoading, setDetailsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState("overview");
 
     useEffect(() => {
         if (user?.id) loadData(user.id);
@@ -123,45 +105,18 @@ const HRDashboard = () => {
     const loadData = async (hrId: string) => {
         setLoading(true);
         try {
-            const [ov, mgrs, hier, lb] = await Promise.all([
+            const [ov, mgrs, hier] = await Promise.all([
                 fetchHROverview(hrId),
                 fetchHRManagers(hrId),
                 fetchHierarchy(hrId),
-                fetchLeaderboard(hrId),
             ]);
             setOverview(ov);
             setManagers(mgrs);
             setHierarchy(hier);
-            setLeaderboard(lb);
-
-            if (mgrs.length > 0 && !selectedManager) {
-                const firstMgrId = mgrs[0]._id;
-                setSelectedManager(firstMgrId);
-                loadManagerDetails(firstMgrId);
-            }
         } catch (e) {
             console.error("Failed to load HR data:", e);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const loadManagerDetails = async (managerId: string) => {
-        setDetailsLoading(true);
-        try {
-            const [emps, fbs] = await Promise.all([
-                fetchEmployees(managerId),
-                fetchFeedbacks(managerId),
-            ]);
-            setSelectedEmployees(emps);
-            setSelectedFeedbacks(fbs);
-            // Reset suggestions when switching managers
-            setSuggestions([]);
-            setAttritionPredictions([]);
-        } catch (e) {
-            console.error("Failed to load manager details:", e);
-        } finally {
-            setDetailsLoading(false);
         }
     };
 
@@ -227,17 +182,15 @@ const HRDashboard = () => {
         );
     }
 
-    const tabs = [
-        { id: "overview", label: "Overview", icon: LayoutDashboard },
-        { id: "details", label: "Manager Details", icon: User },
-        { id: "hierarchy", label: "Org Chart", icon: Network },
-        { id: "leaderboard", label: "Leaderboard", icon: Trophy },
-        { id: "suggestions", label: "AI Suggestions", icon: Lightbulb },
-        { id: "attrition", label: "Attrition Risk", icon: UserMinus },
-        { id: "reports", label: "Report Center", icon: Mail },
-    ];
+    // Sort managers by score for table rank
+    const rankedManagers = [...managers].sort(
+        (a, b) => b.effectivenessScore - a.effectivenessScore
+    );
 
-    const selectedMgr = managers.find(m => m._id === selectedManager);
+    const tabs = [
+        { id: "managers", label: "Managers", icon: LayoutDashboard },
+        { id: "hierarchy", label: "Org Chart", icon: Network },
+    ];
 
     return (
         <div className="min-h-screen bg-background">
@@ -284,292 +237,223 @@ const HRDashboard = () => {
             </header>
 
             <main className="container mx-auto px-6 py-6 max-w-7xl">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="bg-card border border-border p-1 h-auto flex-wrap">
-                        {tabs.map((tab) => (
-                            <TabsTrigger
-                                key={tab.id}
-                                value={tab.id}
-                                className="flex items-center gap-1.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2"
+                <Tabs defaultValue="managers" className="space-y-6">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                        <TabsList className="bg-card border border-border p-1 h-auto">
+                            {tabs.map((tab) => (
+                                <TabsTrigger
+                                    key={tab.id}
+                                    value={tab.id}
+                                    className="flex items-center gap-1.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2"
+                                >
+                                    <tab.icon className="h-4 w-4" />
+                                    <span className="hidden sm:inline">{tab.label}</span>
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                        <div className="flex items-center gap-3">
+                            {/* Quick stats badges */}
+                            <div className="hidden md:flex items-center gap-2">
+                                <span className="text-xs px-2.5 py-1 rounded-full border border-border bg-secondary/50 text-muted-foreground">
+                                    <Users className="h-3 w-3 inline mr-1" />
+                                    {overview?.totalManagers || 0} Managers
+                                </span>
+                                <span className="text-xs px-2.5 py-1 rounded-full border border-border bg-secondary/50 text-muted-foreground">
+                                    {overview?.totalEmployees || 0} Employees
+                                </span>
+                                <span className="text-xs px-2.5 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary font-semibold">
+                                    <Sparkles className="h-3 w-3 inline mr-1" />
+                                    Avg {overview?.avgEffectiveness || 0}%
+                                </span>
+                            </div>
+                            <Button
+                                onClick={handleSendAllReports}
+                                disabled={reportsLoading}
+                                size="sm"
+                                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:opacity-90 disabled:opacity-50 gap-1.5"
                             >
-                                <tab.icon className="h-4 w-4" />
-                                <span className="hidden sm:inline">{tab.label}</span>
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-
-                    {/* ══════════════ OVERVIEW TAB ══════════════ */}
-                    <TabsContent value="overview">
-                        <div className="space-y-6">
-                            {/* Stat cards */}
-                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                                {[
-                                    { label: "Total Managers", value: overview?.totalManagers || 0, icon: Building2, color: "text-violet-400" },
-                                    { label: "Total Employees", value: overview?.totalEmployees || 0, icon: Users, color: "text-primary" },
-                                    { label: "Total Feedbacks", value: overview?.totalFeedbacks || 0, icon: MessageSquare, color: "text-accent" },
-                                    { label: "Manager Score Avg", value: `${overview?.avgEffectiveness || 0}%`, icon: Sparkles, color: "text-primary shadow-sm shadow-primary/20" },
-                                    { label: "Avg Sentiment", value: `${Math.round((overview?.avgSentiment || 0) * 100)}%`, icon: TrendingUp, color: "text-success" },
-                                ].map((stat, i) => (
-                                    <motion.div
-                                        key={stat.label}
-                                        initial={{ opacity: 0, y: 12 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: i * 0.06 }}
-                                        className="glass-card rounded-lg p-5"
-                                    >
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</span>
-                                        </div>
-                                        <p className="text-2xl font-display font-bold text-foreground">{stat.value}</p>
-                                    </motion.div>
-                                ))}
-                            </div>
-
-                            {/* Manager score gauges */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                                {managers.slice(0, 3).map((mgr, i) => (
-                                    <motion.div
-                                        key={mgr._id}
-                                        initial={{ opacity: 0, scale: 0.9 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        transition={{ delay: 0.1 + i * 0.08 }}
-                                    >
-                                        <ScoreGauge
-                                            label={mgr.name}
-                                            value={mgr.effectivenessScore}
-                                            max={100}
-                                            color={mgr.effectivenessScore >= 70 ? "primary" : mgr.effectivenessScore >= 50 ? "accent" : "destructive"}
-                                        />
-                                    </motion.div>
-                                ))}
-                            </div>
-
-                            {/* Manager dropdown + trend chart */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <label className="text-sm font-medium text-foreground">Score Trend for:</label>
-                                    <select
-                                        value={selectedManager || ""}
-                                        onChange={(e) => {
-                                            const id = e.target.value;
-                                            setSelectedManager(id);
-                                            loadManagerDetails(id);
-                                        }}
-                                        className="px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                    >
-                                        {managers.map(m => (
-                                            <option key={m._id} value={m._id}>{m.name} — {m.department}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                {selectedManager && (
-                                    <ScoreTrendChart
-                                        managerId={selectedManager}
-                                        currentScore={selectedMgr?.effectivenessScore || 0}
-                                    />
+                                {reportsLoading ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    <Send className="h-3.5 w-3.5" />
                                 )}
-                            </div>
-
-                            {/* Manager summary cards */}
-                            <div className="space-y-3">
-                                <h3 className="font-display text-lg font-semibold text-foreground">Manager Summary</h3>
-                                {managers.map((mgr, i) => (
-                                    <motion.div
-                                        key={mgr._id}
-                                        initial={{ opacity: 0, x: -12 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: i * 0.06 }}
-                                        className="glass-card rounded-lg p-4 flex items-center justify-between gap-4 flex-wrap"
-                                    >
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-xs shrink-0">
-                                                {mgr.name.split(" ").map(n => n[0]).join("")}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-medium text-foreground text-sm truncate">{mgr.name}</p>
-                                                <p className="text-xs text-muted-foreground">{mgr.department} · {mgr.counts.employees} employees</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-right">
-                                                <p className="text-sm font-bold text-foreground flex items-center gap-1">
-                                                    <Sparkles className="h-3 w-3 text-primary animate-pulse" />
-                                                    {mgr.effectivenessScore}%
-                                                </p>
-                                                <p className="text-[10px] text-muted-foreground">Manager Score</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-bold text-foreground">{Math.round(mgr.sentimentScore * 100)}%</p>
-                                                <p className="text-[10px] text-muted-foreground">Sentiment</p>
-                                            </div>
-                                            <span className={`text-[10px] px-2 py-1 rounded-lg border font-bold ${getCategoryBg(mgr.category)}`}>
-                                                {mgr.category}
-                                            </span>
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedManager(mgr._id);
-                                                    loadManagerDetails(mgr._id);
-                                                    setActiveTab("details");
-                                                }}
-                                                className="text-xs font-semibold text-primary hover:underline ml-2"
-                                            >
-                                                View Details
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </div>
+                                <span className="hidden sm:inline">
+                                    {reportsLoading ? "Sending..." : "Send All Reports"}
+                                </span>
+                            </Button>
                         </div>
-                    </TabsContent>
+                    </div>
 
-                    {/* ══════════════ DETAILS TAB ══════════════ */}
-                    <TabsContent value="details">
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="h-12 w-12 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                                        {selectedMgr?.name.split(" ").map(n => n[0]).join("")}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-display text-lg font-semibold text-foreground">{selectedMgr?.name}</h3>
-                                        <p className="text-sm text-muted-foreground">{selectedMgr?.department} · {selectedMgr?.experienceYears}yr Experience</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <select
-                                        value={selectedManager || ""}
-                                        onChange={(e) => {
-                                            const id = e.target.value;
-                                            setSelectedManager(id);
-                                            loadManagerDetails(id);
-                                        }}
-                                        className="px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                    >
-                                        {managers.map(m => (
-                                            <option key={m._id} value={m._id}>{m.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
+                    {/* Success toast */}
+                    {reportsSuccess && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-2"
+                        >
+                            <CheckCircle className="h-4 w-4" />
+                            <span className="text-sm font-medium">{reportsSuccess}</span>
+                        </motion.div>
+                    )}
 
-                            {detailsLoading ? (
-                                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                    <p className="text-sm text-muted-foreground">Loading manager details...</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* Team Members */}
-                                    <div className="glass-card rounded-xl p-6">
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <Users className="h-5 w-5 text-primary" />
-                                            <h4 className="font-medium text-foreground">Team Members</h4>
-                                        </div>
-                                        <div className="space-y-3">
-                                            {selectedEmployees.map((emp) => (
-                                                <div key={emp._id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border/50">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-muted-foreground">
-                                                            {emp.name.split(" ").map(n => n[0]).join("")}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-medium text-foreground leading-tight">{emp.name}</p>
-                                                            <p className="text-[10px] text-muted-foreground capitalize">{emp.role}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <Star className={`h-3 w-3 ${getRatingColor(emp.performanceRating)}`} />
-                                                        <span className={`text-xs font-bold ${getRatingColor(emp.performanceRating)}`}>
-                                                            {emp.performanceRating}
+                    {/* ══════════════ MANAGERS TABLE TAB ══════════════ */}
+                    <TabsContent value="managers">
+                        <div className="glass-card rounded-xl border border-border overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-border bg-secondary/30">
+                                            <th className="text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">#</th>
+                                            <th className="text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">Manager</th>
+                                            <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">Score</th>
+                                            <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">Sentiment</th>
+                                            <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">Category</th>
+                                            <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">Team</th>
+                                            <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">Feedbacks</th>
+                                            <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">HRBP Agent</th>
+                                            <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {rankedManagers.map((mgr, i) => {
+                                            const medals = ["🥇", "🥈", "🥉"];
+                                            const isTop3 = i < 3;
+
+                                            return (
+                                                <motion.tr
+                                                    key={mgr._id}
+                                                    initial={{ opacity: 0, y: 8 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: i * 0.04 }}
+                                                    className="border-b border-border/50 hover:bg-secondary/20 transition-colors group"
+                                                >
+                                                    {/* Rank */}
+                                                    <td className="px-4 py-3">
+                                                        <span className={`text-sm font-bold ${isTop3 ? "text-primary" : "text-muted-foreground"}`}>
+                                                            {isTop3 ? medals[i] : i + 1}
                                                         </span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                                                    </td>
 
-                                    {/* Recent Feedback */}
-                                    <div className="glass-card rounded-xl p-6 text-foreground">
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <MessageSquare className="h-5 w-5 text-accent" />
-                                            <h4 className="font-medium text-foreground">Employee Feedback</h4>
-                                        </div>
-                                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                            {selectedFeedbacks.length > 0 ? (
-                                                selectedFeedbacks.map((fb) => (
-                                                    <div key={fb._id} className="p-3 rounded-lg bg-secondary/30 border border-border/50">
-                                                        <div className="flex items-center justify-between mb-1.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-bold text-muted-foreground">{fb.fromEmployee}</span>
-                                                                {fb.pulseMood && (
-                                                                    <span className="text-xs">
-                                                                        {fb.pulseMood === "thriving" ? "🔥" : fb.pulseMood === "happy" ? "😊" : fb.pulseMood === "neutral" ? "😐" : fb.pulseMood === "stressed" ? "😓" : "😞"}
-                                                                    </span>
-                                                                )}
-                                                                {fb.feedbackCategory && (
-                                                                    <span className="text-[9px] font-semibold text-muted-foreground uppercase opacity-70">
-                                                                        {fb.feedbackCategory}
-                                                                    </span>
-                                                                )}
+                                                    {/* Manager info */}
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-[10px] shrink-0">
+                                                                {mgr.name.split(" ").map(n => n[0]).join("")}
                                                             </div>
-                                                            <div className="flex items-center gap-2">
-                                                                {fb.compositeFeedbackScore != null && (
-                                                                    <span className="text-[9px] font-bold text-primary/80">
-                                                                        {Math.round(fb.compositeFeedbackScore * 100)}%
-                                                                    </span>
-                                                                )}
-                                                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${fb.sentimentScore >= 0.6 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : fb.sentimentScore <= 0.4 ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"}`}>
-                                                                    {getSentimentLabel(fb.sentimentScore)}
-                                                                </span>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-medium text-foreground truncate">{mgr.name}</p>
+                                                                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                                    <Building2 className="h-2.5 w-2.5" />
+                                                                    {mgr.department} · {mgr.experienceYears}yr
+                                                                </p>
                                                             </div>
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground italic leading-relaxed">"{fb.comment}"</p>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <p className="text-xs text-muted-foreground text-center py-8">No feedback available for this manager.</p>
-                                            )}
-                                        </div>
-                                    </div>
+                                                    </td>
 
-                                    {/* AI Metrics Breakdown */}
-                                    <div className="glass-card rounded-xl p-6 lg:col-span-2">
-                                        <div className="flex items-center gap-2 mb-6">
-                                            <Sparkles className="h-5 w-5 text-primary" />
-                                            <h4 className="font-medium text-foreground">6-Dimension KPI Breakdown</h4>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
-                                            {selectedMgr?.extendedMetrics && Object.entries(selectedMgr.extendedMetrics)
-                                                .filter(([key]) => extendedMetricLabels[key] !== undefined)
-                                                .map(([key, value], i) => {
-                                                    const isIDP = key === "IDP";
-                                                    const displayValue = isIDP ? `${value} employees` : `${String(value)}%`;
-                                                    const barWidth = isIDP ? (Number(value) / 5) * 100 : Number(value);
-                                                    return (
-                                                        <div key={key} className="space-y-2">
-                                                            <div className="flex justify-between text-xs font-semibold">
-                                                                <span className="text-muted-foreground">{extendedMetricLabels[key] || key}</span>
-                                                                <span className="text-foreground">{displayValue}</span>
-                                                            </div>
-                                                            <div className="h-1.5 rounded-full bg-secondary/40 overflow-hidden">
-                                                                <motion.div
-                                                                    initial={{ width: 0 }}
-                                                                    animate={{ width: `${barWidth}%` }}
-                                                                    transition={{ duration: 0.8, delay: i * 0.05 }}
-                                                                    className={`h-full rounded-full ${barWidth >= 80 ? 'bg-emerald-500' : barWidth >= 60 ? 'bg-primary' : 'bg-destructive'}`}
-                                                                />
-                                                            </div>
+                                                    {/* Score */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <Sparkles className="h-3 w-3 text-primary" />
+                                                            <span className={`text-sm font-bold ${getCategoryColor(mgr.category)}`}>
+                                                                {mgr.effectivenessScore}%
+                                                            </span>
                                                         </div>
-                                                    );
-                                                })}
-                                            {(!selectedMgr?.extendedMetrics || Object.keys(selectedMgr.extendedMetrics).filter(k => extendedMetricLabels[k]).length === 0) && (
-                                                <p className="text-sm text-muted-foreground text-center py-8 italic col-span-3">No specific KPI metrics available for this manager.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                                                    </td>
+
+                                                    {/* Sentiment */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className="text-sm font-semibold text-foreground">
+                                                            {Math.round(mgr.sentimentScore * 100)}%
+                                                        </span>
+                                                    </td>
+
+                                                    {/* Category */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className={`text-[10px] px-2 py-1 rounded-lg border font-bold ${getCategoryBg(mgr.category)}`}>
+                                                            {mgr.category}
+                                                        </span>
+                                                    </td>
+
+                                                    {/* Employees */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className="text-sm text-foreground font-medium">
+                                                            {mgr.counts.employees}
+                                                        </span>
+                                                    </td>
+
+                                                    {/* Feedbacks */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className="text-sm text-foreground font-medium">
+                                                            {mgr.counts.feedbacks}
+                                                        </span>
+                                                    </td>
+
+                                                    {/* HRBP Agent (placeholder) */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        <button
+                                                            disabled
+                                                            title="HRBP Agent — Coming Soon"
+                                                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/50 border border-border text-muted-foreground text-[10px] font-medium cursor-not-allowed opacity-60"
+                                                        >
+                                                            <Bot className="h-3.5 w-3.5" />
+                                                            HRBP
+                                                        </button>
+                                                    </td>
+
+                                                    {/* Actions */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <button className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-secondary border border-transparent hover:border-border transition-all">
+                                                                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                                                                </button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-48">
+                                                                <DropdownMenuItem
+                                                                    onClick={() => setDetailManager(mgr)}
+                                                                    className="flex items-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Eye className="h-3.5 w-3.5" />
+                                                                    View Details
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={() => {
+                                                                        setSuggestions([]);
+                                                                        setSuggestionsManager(mgr);
+                                                                    }}
+                                                                    className="flex items-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Lightbulb className="h-3.5 w-3.5" />
+                                                                    AI Suggestions
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={() => {
+                                                                        setAttritionPredictions([]);
+                                                                        setAttritionManager(mgr);
+                                                                    }}
+                                                                    className="flex items-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <UserMinus className="h-3.5 w-3.5" />
+                                                                    Attrition Risk
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleSendSingleReport(mgr._id)}
+                                                                    disabled={reportsLoading}
+                                                                    className="flex items-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Mail className="h-3.5 w-3.5" />
+                                                                    Send Report
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </td>
+                                                </motion.tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </TabsContent>
 
@@ -591,7 +475,6 @@ const HRDashboard = () => {
                                         <p className="text-xs text-muted-foreground">{hierarchy.hr.designation}</p>
                                         <p className="text-[10px] text-violet-400 mt-1">{hierarchy.hr.email}</p>
                                     </div>
-                                    {/* Connector */}
                                     <div className="w-px h-8 bg-border" />
                                     <div className="w-3 h-3 rounded-full border-2 border-border bg-card" />
                                     <div className="w-px h-4 bg-border" />
@@ -600,7 +483,6 @@ const HRDashboard = () => {
                                 {/* Managers Row */}
                                 <div className="flex justify-center">
                                     <div className="relative">
-                                        {/* Horizontal connector line */}
                                         {hierarchy.managers.length > 1 && (
                                             <div
                                                 className="absolute top-0 h-px bg-border"
@@ -619,15 +501,12 @@ const HRDashboard = () => {
                                                     transition={{ delay: 0.15 + i * 0.1 }}
                                                     className="flex flex-col items-center"
                                                 >
-                                                    {/* Vertical connector down from horizontal line */}
                                                     <div className="w-px h-4 bg-border" />
-
-                                                    {/* Manager Card */}
                                                     <div className={`glass-card rounded-xl p-4 border-2 w-full ${mgr.effectivenessScore >= 70 ? "border-emerald-500/20" :
                                                         mgr.effectivenessScore >= 50 ? "border-amber-500/20" : "border-red-500/20"
                                                         }`}>
                                                         <div className="text-center mb-3">
-                                                            <div className={`h-11 w-11 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm mx-auto mb-2`}>
+                                                            <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm mx-auto mb-2">
                                                                 {mgr.name.split(" ").map(n => n[0]).join("")}
                                                             </div>
                                                             <p className="font-medium text-foreground text-sm">{mgr.name}</p>
@@ -639,7 +518,7 @@ const HRDashboard = () => {
                                                                     <Sparkles className="h-3 w-3 text-primary" />
                                                                     <p className={`text-lg font-bold ${getCategoryColor(mgr.category)}`}>{mgr.effectivenessScore}%</p>
                                                                 </div>
-                                                                <p className="text-[9px] text-muted-foreground">Manager Score</p>
+                                                                <p className="text-[9px] text-muted-foreground">Score</p>
                                                             </div>
                                                             <div className="w-px bg-border" />
                                                             <div className="text-center">
@@ -652,12 +531,10 @@ const HRDashboard = () => {
                                                         </span>
                                                     </div>
 
-                                                    {/* Connector to employees */}
                                                     <div className="w-px h-4 bg-border" />
                                                     <div className="w-2 h-2 rounded-full border-2 border-border bg-card" />
                                                     <div className="w-px h-3 bg-border" />
 
-                                                    {/* Employees */}
                                                     <div className="space-y-2 w-full">
                                                         {mgr.employees.map((emp, j) => (
                                                             <motion.div
@@ -696,395 +573,31 @@ const HRDashboard = () => {
                         )}
                     </TabsContent>
 
-                    {/* ══════════════ LEADERBOARD TAB ══════════════ */}
-                    <TabsContent value="leaderboard">
-                        <div className="space-y-5">
-                            <div>
-                                <h3 className="font-display text-lg font-semibold text-foreground">Manager Leaderboard</h3>
-                                <p className="text-sm text-muted-foreground">Ranked by effectiveness score with 7-day trend</p>
-                            </div>
-
-                            <div className="space-y-3">
-                                {leaderboard.map((entry, i) => {
-                                    const isTop3 = entry.rank <= 3;
-                                    const medals = ["🥇", "🥈", "🥉"];
-
-                                    return (
-                                        <motion.div
-                                            key={entry.id}
-                                            initial={{ opacity: 0, x: -16 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: i * 0.08 }}
-                                            className={`glass-card rounded-xl p-5 flex items-center justify-between gap-4 flex-wrap ${isTop3 ? "border-2 border-primary/20" : ""
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-4 min-w-0">
-                                                {/* Rank */}
-                                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-lg shrink-0 ${isTop3 ? "gradient-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
-                                                    }`}>
-                                                    {isTop3 ? medals[entry.rank - 1] : entry.rank}
-                                                </div>
-                                                {/* Avatar + info */}
-                                                <div className="min-w-0">
-                                                    <p className="font-medium text-foreground text-sm truncate">{entry.name}</p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {entry.department} · {entry.experienceYears}yr exp · {entry.counts.employees} employees
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-5">
-                                                {/* Effectiveness */}
-                                                <div className="text-center">
-                                                    <div className="flex items-center gap-1 justify-center">
-                                                        <Sparkles className="h-3.5 w-3.5 text-primary" />
-                                                        <p className={`text-xl font-display font-bold ${getCategoryColor(entry.category)}`}>
-                                                            {entry.effectivenessScore}%
-                                                        </p>
-                                                    </div>
-                                                    <p className="text-[10px] text-muted-foreground">Manager Score</p>
-                                                </div>
-
-                                                {/* Sentiment */}
-                                                <div className="text-center">
-                                                    <p className="text-xl font-display font-bold text-foreground">
-                                                        {Math.round(entry.sentimentScore * 100)}%
-                                                    </p>
-                                                    <p className="text-[10px] text-muted-foreground">Sentiment</p>
-                                                </div>
-
-                                                {/* 7-day trend */}
-                                                <div className="flex items-center gap-1.5 min-w-[80px]">
-                                                    {entry.trend > 0 ? (
-                                                        <ArrowUpRight className="h-4 w-4 text-emerald-400" />
-                                                    ) : entry.trend < 0 ? (
-                                                        <ArrowDownRight className="h-4 w-4 text-red-400" />
-                                                    ) : (
-                                                        <Minus className="h-4 w-4 text-muted-foreground" />
-                                                    )}
-                                                    <span className={`text-sm font-semibold ${entry.trend > 0 ? "text-emerald-400" :
-                                                        entry.trend < 0 ? "text-red-400" : "text-muted-foreground"
-                                                        }`}>
-                                                        {entry.trend > 0 ? "+" : ""}{entry.trend}
-                                                    </span>
-                                                    <span className="text-[10px] text-muted-foreground">7d</span>
-                                                </div>
-
-                                                {/* Category badge */}
-                                                <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold ${getCategoryBg(entry.category)}`}>
-                                                    {entry.category}
-                                                </span>
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </TabsContent>
-
-                    {/* ══════════════ AI SUGGESTIONS TAB ══════════════ */}
-                    <TabsContent value="suggestions">
-                        <div className="space-y-5">
-                            <div className="flex items-center justify-between flex-wrap gap-3">
-                                <div>
-                                    <h3 className="font-display text-lg font-semibold text-foreground">
-                                        AI Manager Suggestions
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        Generate AI-powered improvement suggestions for any manager
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <select
-                                        value={selectedManager || ""}
-                                        onChange={(e) => {
-                                            setSelectedManager(e.target.value);
-                                            setSuggestions([]);
-                                        }}
-                                        className="px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                    >
-                                        {managers.map(m => (
-                                            <option key={m._id} value={m._id}>{m.name} — {m.department}</option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={() => selectedManager && handleGenerateSuggestions(selectedManager)}
-                                        disabled={sugsLoading || !selectedManager}
-                                        className="px-4 py-2 rounded-lg gradient-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
-                                    >
-                                        {sugsLoading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Sparkles className="h-4 w-4" />
-                                        )}
-                                        {sugsLoading ? "Generating..." : "Generate Suggestions"}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Selected manager info */}
-                            {selectedMgr && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="glass-card rounded-lg p-4 flex items-center gap-4 flex-wrap"
-                                >
-                                    <div className="h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-xs shrink-0">
-                                        {selectedMgr.name.split(" ").map(n => n[0]).join("")}
-                                    </div>
-                                    <div>
-                                        <p className="font-medium text-foreground text-sm">{selectedMgr.name}</p>
-                                        <p className="text-xs text-muted-foreground">{selectedMgr.department}</p>
-                                    </div>
-                                    <div className="ml-auto flex items-center gap-4">
-                                        <div className="text-center">
-                                            <p className={`text-lg font-bold ${getCategoryColor(selectedMgr.category)}`}>{selectedMgr.effectivenessScore}%</p>
-                                            <p className="text-[9px] text-muted-foreground">Score</p>
-                                        </div>
-                                        <span className={`text-[10px] px-2 py-1 rounded-lg border font-bold ${getCategoryBg(selectedMgr.category)}`}>
-                                            {selectedMgr.category}
-                                        </span>
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {/* Suggestions list */}
-                            {sugsLoading ? (
-                                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                    <p className="text-sm text-muted-foreground">Analyzing manager data...</p>
-                                </div>
-                            ) : suggestions.length > 0 ? (
-                                <div className="grid gap-4">
-                                    {suggestions.map((sug, i) => {
-                                        const priorityColor = sug.priority === "high"
-                                            ? "bg-red-500/10 text-red-400 border-red-500/20"
-                                            : sug.priority === "medium"
-                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-
-                                        const categoryIcon: Record<string, string> = {
-                                            communication: "💬",
-                                            leadership: "👑",
-                                            delegation: "🤝",
-                                            growth: "📈",
-                                            culture: "🌟",
-                                        };
-
-                                        return (
-                                            <motion.div
-                                                key={i}
-                                                initial={{ opacity: 0, y: 12 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: i * 0.08 }}
-                                                className="glass-card rounded-xl p-5"
-                                            >
-                                                <div className="flex items-start justify-between gap-3 mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-lg">{categoryIcon[sug.category] || "💡"}</span>
-                                                        <h4 className="font-medium text-foreground text-sm">{sug.title}</h4>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 shrink-0">
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize ${priorityColor}`}>
-                                                            {sug.priority}
-                                                        </span>
-                                                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-border bg-secondary text-muted-foreground font-medium capitalize">
-                                                            {sug.category}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <p className="text-sm text-muted-foreground leading-relaxed mb-3">{sug.description}</p>
-                                                <div className="flex items-center gap-2">
-                                                    <ArrowUpRight className="h-3.5 w-3.5 text-emerald-400" />
-                                                    <span className="text-xs text-muted-foreground">Predicted score:</span>
-                                                    <span className="text-sm font-bold text-emerald-400">{sug.predictedScore}%</span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        (+{sug.predictedScore - (selectedMgr?.effectivenessScore || 0)})
-                                                    </span>
-                                                </div>
-                                            </motion.div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                                    <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                                        <Lightbulb className="h-8 w-8 text-primary" />
-                                    </div>
-                                    <p className="text-sm text-muted-foreground">
-                                        Select a manager and click "Generate Suggestions" to get AI-powered recommendations.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </TabsContent>
-
-                    {/* ══════════════ ATTRITION RISK TAB ══════════════ */}
-                    <TabsContent value="attrition">
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between flex-wrap gap-3">
-                                <div>
-                                    <h3 className="font-display text-lg font-semibold text-foreground">
-                                        Attrition Risk Analysis
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        Identify flight risks and impact in {selectedMgr?.name}'s team
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <select
-                                        value={selectedManager || ""}
-                                        onChange={(e) => {
-                                            const id = e.target.value;
-                                            setSelectedManager(id);
-                                            loadManagerDetails(id);
-                                            setAttritionPredictions([]);
-                                        }}
-                                        className="px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                    >
-                                        {managers.map(m => (
-                                            <option key={m._id} value={m._id}>{m.name}</option>
-                                        ))}
-                                    </select>
-                                    <Button
-                                        onClick={() => selectedManager && handleGenerateAttrition(selectedManager)}
-                                        disabled={attritionLoading || !selectedManager}
-                                        className="gradient-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
-                                    >
-                                        {attritionLoading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Sparkles className="h-4 w-4" />
-                                        )}
-                                        {attritionLoading ? "Analyzing..." : "Run Prediction"}
-                                    </Button>
-                                </div>
-                            </div>
-
-                            <AttritionRiskTab
-                                predictions={attritionPredictions}
-                                loading={attritionLoading}
-                                onGenerate={() => selectedManager && handleGenerateAttrition(selectedManager)}
-                            />
-                        </div>
-                    </TabsContent>
-
-                    {/* ══════════════ REPORT CENTER TAB ══════════════ */}
-                    <TabsContent value="reports">
-                        <div className="space-y-6">
-                            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-card/60 backdrop-blur-md border border-border/50 p-6 rounded-2xl shadow-xl">
-                                <div className="space-y-1">
-                                    <h3 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
-                                        <Mail className="h-6 w-6 text-primary" />
-                                        Report Center
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground max-w-md">
-                                        Distribute effectiveness insights across your leadership team. Send automated monthly reports with a single click.
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <Button
-                                        onClick={handleSendAllReports}
-                                        disabled={reportsLoading}
-                                        className="relative overflow-hidden group h-12 px-8 rounded-xl bg-gradient-to-r from-primary to-violet-600 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-                                    >
-                                        <AnimatePresence mode="wait">
-                                            {reportsLoading ? (
-                                                <motion.div
-                                                    key="loading"
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    exit={{ opacity: 0 }}
-                                                    className="flex items-center gap-2"
-                                                >
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                    <span>Sending All...</span>
-                                                </motion.div>
-                                            ) : (
-                                                <motion.div
-                                                    key="idle"
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    exit={{ opacity: 0 }}
-                                                    className="flex items-center gap-2"
-                                                >
-                                                    <Sparkles className="h-4 w-4" />
-                                                    <span>Send All Reports</span>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {reportsSuccess && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-3"
-                                >
-                                    <CheckCircle className="h-5 w-5" />
-                                    <span className="text-sm font-medium">{reportsSuccess}</span>
-                                </motion.div>
-                            )}
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {managers.map((mgr, i) => (
-                                    <motion.div
-                                        key={mgr._id}
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        transition={{ delay: i * 0.05 }}
-                                        className="relative group overflow-hidden"
-                                    >
-                                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-violet-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        <div className="glass-card h-full p-5 rounded-2xl border border-border/40 hover:border-primary/30 transition-colors flex flex-col justify-between">
-                                            <div>
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm shadow-inner">
-                                                        {mgr.name.split(" ").map(n => n[0]).join("")}
-                                                    </div>
-                                                    <span className={`text-[10px] px-2.5 py-1 rounded-full border font-bold ${getCategoryBg(mgr.category)}`}>
-                                                        {mgr.category}
-                                                    </span>
-                                                </div>
-                                                <h4 className="font-display font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">{mgr.name}</h4>
-                                                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mb-4">
-                                                    <Building2 className="h-3 w-3" />
-                                                    {mgr.department}
-                                                </p>
-
-                                                <div className="flex items-center gap-4 mb-6">
-                                                    <div>
-                                                        <p className="text-lg font-bold text-foreground leading-none">{mgr.effectivenessScore}%</p>
-                                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Score</p>
-                                                    </div>
-                                                    <div className="w-px h-8 bg-border/50" />
-                                                    <div>
-                                                        <p className="text-lg font-bold text-foreground leading-none">{Math.round(mgr.sentimentScore * 100)}%</p>
-                                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Sentiment</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => handleSendSingleReport(mgr._id)}
-                                                disabled={reportsLoading}
-                                                className="w-full bg-secondary/50 border border-border/50 hover:bg-primary hover:text-primary-foreground group-hover:border-primary/30 transition-all rounded-lg h-10 gap-2"
-                                            >
-                                                <Mail className="h-3.5 w-3.5" />
-                                                Send Individual Report
-                                            </Button>
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </div>
-                        </div>
-                    </TabsContent>
                 </Tabs>
             </main>
+
+            {/* ═══ Modals ═══ */}
+            <ManagerDetailModal
+                manager={detailManager}
+                open={!!detailManager}
+                onClose={() => setDetailManager(null)}
+            />
+            <SuggestionsModal
+                manager={suggestionsManager}
+                open={!!suggestionsManager}
+                onClose={() => setSuggestionsManager(null)}
+                suggestions={suggestions}
+                loading={sugsLoading}
+                onGenerate={handleGenerateSuggestions}
+            />
+            <AttritionModal
+                manager={attritionManager}
+                open={!!attritionManager}
+                onClose={() => setAttritionManager(null)}
+                predictions={attritionPredictions}
+                loading={attritionLoading}
+                onGenerate={handleGenerateAttrition}
+            />
         </div>
     );
 };

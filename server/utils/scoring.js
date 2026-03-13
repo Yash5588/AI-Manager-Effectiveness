@@ -1,57 +1,103 @@
 /**
- * Normalize extended metrics (5 percentage fields + IDP count) into a 0-1 score.
- * IDP value is the count of employees with active development goals.
+ * 9-Dimension Manager Effectiveness Scoring Formula
+ *
+ * Dimensions and default weights:
+ *   1. employeePerformance  - 12%  (avg employee rating, normalized 0-1)
+ *   2. feedbackSentiment    - 13%  (avg composite feedback score, 0-1)
+ *   3. kpiMetrics           - 12%  (avg KPI metric value / 100, 0-1)
+ *   4. teamRetention        - 10%  (teamRetentionRate / 100)
+ *   5. goalCompletion       - 10%  (goalCompletionRate / 100)
+ *   6. employeePromotion    -  8%  (employeePromotionRate / 100)
+ *   7. subordinate360       - 12%  (subordinate360Rating / 100)
+ *   8. engagement           - 12%  (employeeEngagementScore / 100)
+ *   9. idpScore             -  8%  (min(1, IDP / totalEmployees))
+ *
+ * Missing dimensions have their weight redistributed proportionally.
  */
-function computeExtendedScore(ext, employeeCount) {
-    if (!ext) return 0.5;
 
-    const pctFields = [
-        ext.teamRetentionRate,
-        ext.goalCompletionRate,
-        ext.employeePromotionRate,
-        ext.subordinate360Rating,
-        ext.employeeEngagementScore,
-    ];
-
-    const validPct = pctFields.filter(v => v != null);
-    const avgPct = validPct.length > 0
-        ? validPct.reduce((s, v) => s + v / 100, 0) / validPct.length
-        : 0.5;
-
-    // IDP: ratio of employees with dev goals vs total team, capped at 1
-    const idpNorm = ext.IDP != null && employeeCount > 0
-        ? Math.min(1, ext.IDP / employeeCount)
-        : 0.5;
-
-    // Weighted: 80% from percentage metrics, 20% from IDP ratio
-    return avgPct * 0.8 + idpNorm * 0.2;
-}
+const DIMENSION_WEIGHTS = {
+    employeePerformance: 0.12,
+    feedbackSentiment: 0.13,
+    kpiMetrics: 0.12,
+    teamRetention: 0.10,
+    goalCompletion: 0.10,
+    employeePromotion: 0.08,
+    subordinate360: 0.12,
+    engagement: 0.12,
+    idpScore: 0.08,
+};
 
 /**
- * Compute the final effectiveness score using weighted components.
- * Default weights: 20% Employee, 20% Feedback, 20% KPI, 40% Extended Metrics.
+ * Compute the 9-dimension formula score and per-dimension breakdown.
+ *
+ * @param {Object} data
+ * @param {number|null} data.avgEmployeeScore    - 0-1 (normalized employee perf avg)
+ * @param {number|null} data.avgFeedbackScore    - 0-1 (avg composite feedback score)
+ * @param {number|null} data.avgMetricScore      - 0-1 (avg KPI metric / 100)
+ * @param {Object|null} data.extendedMetrics     - ManagerExtendedMetrics doc
+ * @param {number}      data.employeeCount       - total employees (for IDP normalization)
+ * @returns {{ finalScore: number, breakdown: Object }}
  */
-function computeFinalScore(breakdown, weights = {}, avgExtendedScore) {
-    const { avgEmployeeScore, avgFeedbackScore, avgMetricScore } = breakdown;
+function computeFormulaScore(data) {
     const {
-        employee = 0.2,
-        feedback = 0.2,
-        metrics = 0.2,
-        extended = 0.4
-    } = weights;
+        avgEmployeeScore,
+        avgFeedbackScore,
+        avgMetricScore,
+        extendedMetrics,
+        employeeCount = 0,
+    } = data;
 
-    const extScore = avgExtendedScore ?? 0.5;
+    const ext = extendedMetrics || {};
 
-    const raw =
-        avgEmployeeScore * employee +
-        avgFeedbackScore * feedback +
-        avgMetricScore * metrics +
-        extScore * extended;
+    // Build normalized values for each dimension (0-1), null if missing
+    const dimensionValues = {
+        employeePerformance: avgEmployeeScore != null ? avgEmployeeScore : null,
+        feedbackSentiment: avgFeedbackScore != null ? avgFeedbackScore : null,
+        kpiMetrics: avgMetricScore != null ? avgMetricScore : null,
+        teamRetention: ext.teamRetentionRate != null ? ext.teamRetentionRate / 100 : null,
+        goalCompletion: ext.goalCompletionRate != null ? ext.goalCompletionRate / 100 : null,
+        employeePromotion: ext.employeePromotionRate != null ? ext.employeePromotionRate / 100 : null,
+        subordinate360: ext.subordinate360Rating != null ? ext.subordinate360Rating / 100 : null,
+        engagement: ext.employeeEngagementScore != null ? ext.employeeEngagementScore / 100 : null,
+        idpScore: ext.IDP != null && employeeCount > 0
+            ? Math.min(1, ext.IDP / employeeCount)
+            : null,
+    };
 
-    return Math.round(raw * 100);
+    // Calculate total available weight for redistribution
+    let totalAvailableWeight = 0;
+    for (const [key, val] of Object.entries(dimensionValues)) {
+        if (val != null) {
+            totalAvailableWeight += DIMENSION_WEIGHTS[key];
+        }
+    }
+
+    // If nothing is available, return default 50
+    if (totalAvailableWeight === 0) {
+        const defaultBreakdown = {};
+        for (const key of Object.keys(DIMENSION_WEIGHTS)) {
+            defaultBreakdown[key] = 50;
+        }
+        return { finalScore: 50, breakdown: defaultBreakdown };
+    }
+
+    // Compute weighted score with proportional redistribution
+    let weightedSum = 0;
+    const breakdown = {};
+
+    for (const [key, val] of Object.entries(dimensionValues)) {
+        if (val != null) {
+            const adjustedWeight = DIMENSION_WEIGHTS[key] / totalAvailableWeight;
+            weightedSum += val * adjustedWeight;
+            breakdown[key] = Math.round(val * 100);
+        } else {
+            breakdown[key] = 50; // default for missing dimensions
+        }
+    }
+
+    const finalScore = Math.max(0, Math.min(100, Math.round(weightedSum * 100)));
+
+    return { finalScore, breakdown };
 }
 
-module.exports = {
-    computeExtendedScore,
-    computeFinalScore
-};
+module.exports = { computeFormulaScore, DIMENSION_WEIGHTS };

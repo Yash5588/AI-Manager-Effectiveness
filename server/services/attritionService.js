@@ -286,8 +286,8 @@ STRICT OUTPUT FORMAT — Return ONLY a JSON object:
 
     const models = [
         "deepseek/deepseek-chat",
-        "google/gemini-2.0-flash-exp:free",
-        "meta-llama/llama-3.2-3b-instruct:free",
+        "qwen/qwen3-coder:free",
+        "google/gemma-3-12b-it:free",
     ];
 
     let lastError = null;
@@ -304,7 +304,7 @@ STRICT OUTPUT FORMAT — Return ONLY a JSON object:
                 model,
                 messages: [{ role: "user", content: prompt }],
                 temperature: 0.1,
-                max_tokens: 1500,
+                max_tokens: 600,
             });
 
             const content = completion?.choices?.[0]?.message?.content;
@@ -360,4 +360,4 @@ STRICT OUTPUT FORMAT — Return ONLY a JSON object:
     }));
 }
 
-module.exports = { predictTeamAttrition };
+module.exports = { predictTeamAttrition, computeFormulaFlightRisk };

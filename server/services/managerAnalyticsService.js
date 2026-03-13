@@ -1,0 +1,168 @@
+const mongoose = require("mongoose");
+const User = require("../models/User");
+const Feedback = require("../models/Feedback");
+const PerformanceMetric = require("../models/PerformanceMetric");
+const ManagerExtendedMetrics = require("../models/ManagerExtendedMetrics");
+const ScoreSnapshot = require("../models/ScoreSnapshot");
+const { computeFormulaScore } = require("../utils/scoring");
+
+const FEEDBACK_WINDOW_DAYS = parseInt(process.env.FEEDBACK_WINDOW_DAYS, 10) || 90;
+
+function toObjectId(id) {
+  if (id instanceof mongoose.Types.ObjectId) return id;
+  return new mongoose.Types.ObjectId(id);
+}
+
+function toPlainObject(doc) {
+  return doc?.toObject ? doc.toObject() : doc;
+}
+
+function normalizeEmployeeScore(rating) {
+  return (rating - 1) / 4;
+}
+
+function normalizeMetricValue(value) {
+  return Math.min(1, Math.max(0, value / 100));
+}
+
+function getPerformanceCategory(score) {
+  if (score >= 85) return "Excellent";
+  if (score >= 70) return "Good";
+  if (score >= 50) return "Average";
+  return "Needs Improvement";
+}
+
+function getFeedbackDateFilter() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - FEEDBACK_WINDOW_DAYS);
+  return { createdAt: { $gte: cutoff } };
+}
+
+function buildLatestFeedbackPipeline(managerId) {
+  return [
+    { $match: { managerId: toObjectId(managerId), ...getFeedbackDateFilter() } },
+    { $sort: { createdAt: -1 } },
+    { $group: { _id: "$employeeId", doc: { $first: "$$ROOT" } } },
+    { $replaceRoot: { newRoot: "$doc" } },
+    { $sort: { createdAt: -1 } },
+  ];
+}
+
+async function fetchManagerScoringInputs(managerId) {
+  const managerObjectId = toObjectId(managerId);
+
+  const [employees, feedbacks, metrics, extendedMetrics] = await Promise.all([
+    User.find({ managerId: managerObjectId, userType: "employee" }),
+    Feedback.aggregate(buildLatestFeedbackPipeline(managerObjectId)),
+    PerformanceMetric.find({ managerId: managerObjectId }),
+    ManagerExtendedMetrics.findOne({ managerId: managerObjectId }),
+  ]);
+
+  return { employees, feedbacks, metrics, extendedMetrics };
+}
+
+function computeManagerScoreFromInputs({ employees, feedbacks, metrics, extendedMetrics }) {
+  const avgEmployeeScore = employees.length > 0
+    ? employees.reduce((sum, employee) => sum + normalizeEmployeeScore(employee.performanceRating), 0) / employees.length
+    : 0.5;
+  const avgFeedbackScore = feedbacks.length > 0
+    ? feedbacks.reduce((sum, feedback) => sum + (feedback.compositeFeedbackScore ?? feedback.sentimentScore ?? 0.5), 0) / feedbacks.length
+    : 0.5;
+  const avgMetricScore = metrics.length > 0
+    ? metrics.reduce((sum, metric) => sum + normalizeMetricValue(metric.value), 0) / metrics.length
+    : 0.5;
+
+  const { finalScore, breakdown: formulaBreakdown } = computeFormulaScore({
+    avgEmployeeScore,
+    avgFeedbackScore,
+    avgMetricScore,
+    extendedMetrics,
+    employeeCount: employees.length,
+  });
+
+  const roundedAverages = {
+    avgEmployeeScore: Math.round(avgEmployeeScore * 100) / 100,
+    avgFeedbackScore: Math.round(avgFeedbackScore * 100) / 100,
+    avgMetricScore: Math.round(avgMetricScore * 100) / 100,
+  };
+
+  return {
+    avgEmployeeScore,
+    avgFeedbackScore,
+    avgMetricScore,
+    roundedAverages,
+    formulaBreakdown,
+    finalScore,
+    category: getPerformanceCategory(finalScore),
+    counts: {
+      employees: employees.length,
+      feedbacks: feedbacks.length,
+      metrics: metrics.length,
+    },
+  };
+}
+
+async function computeManagerAnalytics(managerId) {
+  const inputs = await fetchManagerScoringInputs(managerId);
+  const score = computeManagerScoreFromInputs(inputs);
+
+  return {
+    ...inputs,
+    ...score,
+    breakdown: {
+      ...score.roundedAverages,
+      ...score.formulaBreakdown,
+    },
+    extendedMetrics: inputs.extendedMetrics ? toPlainObject(inputs.extendedMetrics) : {},
+  };
+}
+
+async function computeRecentTrend(managerId, monthsBack = 2) {
+  const since = new Date();
+  since.setMonth(since.getMonth() - monthsBack);
+
+  const snapshots = await ScoreSnapshot.find({
+    managerId: toObjectId(managerId),
+    createdAt: { $gte: since },
+  }).sort({ createdAt: 1 });
+
+  if (snapshots.length < 2) return 0;
+  return snapshots[snapshots.length - 1].finalScore - snapshots[0].finalScore;
+}
+
+function buildMonthlyTimeline(months) {
+  const safeMonths = Math.min(24, Math.max(3, months || 12));
+  const now = new Date();
+  const timeline = [];
+
+  for (let i = safeMonths - 1; i >= 0; i -= 1) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    timeline.push({
+      monthKey: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}`,
+      label: monthDate.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+    });
+  }
+
+  return timeline;
+}
+
+function getTierByPercentile(percentile) {
+  if (percentile >= 90) return "Champion";
+  if (percentile >= 70) return "Elite";
+  if (percentile >= 40) return "Contender";
+  return "Rising";
+}
+
+module.exports = {
+  buildLatestFeedbackPipeline,
+  buildMonthlyTimeline,
+  computeManagerAnalytics,
+  computeManagerScoreFromInputs,
+  computeRecentTrend,
+  fetchManagerScoringInputs,
+  getFeedbackDateFilter,
+  getPerformanceCategory,
+  getTierByPercentile,
+  toObjectId,
+  toPlainObject,
+};

@@ -133,6 +133,52 @@ export interface AttritionPrediction {
   recommendation: string;
 }
 
+export interface Touchpoint {
+  week: number;
+  action: string;
+  impact: "high" | "medium" | "low";
+}
+
+export interface ImprovementRoadmapItem {
+  metricKey: string;
+  metricLabel: string;
+  currentScore: number;
+  severity: "critical" | "warning";
+  predictedReasons: string[];
+  touchpoints: Touchpoint[];
+  suggestion: string;
+  milestoneTarget: number;
+  estimatedWeeks: number;
+}
+
+export interface EmployeeCoachingProfile {
+  _id: string;
+  name: string;
+  role: string;
+  email?: string;
+  performanceRating: number;
+  achievementScore: number;
+  runRate: number;
+  attritionRisk: number;
+  riskLevel: "High" | "Medium" | "Low";
+  feedbackSentiment: number;
+  sentimentLabel: "Positive" | "Neutral" | "Negative";
+  feedbackCount: number;
+  pulseMood: string;
+  avgRatings?: Record<string, number | null>;
+}
+
+export interface TeamCoachingMetrics {
+  goalCompletionRate: number;
+  totalDevGoals: number;
+  avgDevGoalAssignment: number;
+  devGoalStatus: "On Track" | "At Risk" | "Behind";
+  teamRetentionRate: number;
+  engagementScore: number;
+  promotionRate: number;
+  subordinate360Rating: number;
+}
+
 export interface ScoreSnapshot {
   _id: string;
   managerId: string;
@@ -274,12 +320,14 @@ export async function fetchAISuggestions(managerId: string): Promise<AISuggestio
 }
 
 export async function fetchEmployeeSuggestions(
-  managerId: string
-): Promise<{ employeeSuggestions: EmployeeSuggestion[]; currentScore: number }> {
-  const res = await api.post(`/manager-analytics/${managerId}/employee-suggestions`);
+  managerId: string,
+  regenerate: boolean = false
+): Promise<{ employeeSuggestions: EmployeeSuggestion[]; currentScore: number; cached?: boolean }> {
+  const res = await api.post(`/manager-analytics/${managerId}/employee-suggestions`, { regenerate });
   return {
     employeeSuggestions: res.data.employeeSuggestions || [],
     currentScore: res.data.currentScore || 0,
+    cached: res.data.cached,
   };
 }
 
@@ -290,6 +338,44 @@ export async function fetchAttritionPredictions(
   return res.data.predictions || [];
 }
 
+export async function fetchImprovementRoadmap(
+  managerId: string,
+  regenerate: boolean = false
+): Promise<{ roadmap: ImprovementRoadmapItem[]; message?: string; cached?: boolean }> {
+  const res = await api.post(`/manager-analytics/${managerId}/improvement-roadmap`, { regenerate });
+  return {
+    roadmap: res.data.roadmap || [],
+    message: res.data.message,
+    cached: res.data.cached,
+  };
+}
+
+export async function fetchEmployeeCoaching(
+  managerId: string
+): Promise<{ employees: EmployeeCoachingProfile[]; teamMetrics: TeamCoachingMetrics }> {
+  const res = await api.get(`/manager-analytics/${managerId}/employee-coaching`);
+  return {
+    employees: res.data.employees || [],
+    teamMetrics: res.data.teamMetrics || {},
+  };
+}
+
+
+// Manager-facing leaderboard (peers under the same HR)
+export async function fetchManagerLeaderboard(managerId: string): Promise<LeaderboardEntry[]> {
+  const res = await api.get(`/manager-analytics/${managerId}/leaderboard`);
+  return res.data;
+}
+
+export async function fetchPeerTrendBenchmark(
+  managerId: string,
+  months: number = 12
+): Promise<PeerTrendBenchmark> {
+  const res = await api.get(`/manager-analytics/${managerId}/peer-trends`, {
+    params: { months },
+  });
+  return res.data;
+}
 
 export default api;
 
@@ -385,6 +471,47 @@ export interface LeaderboardEntry {
     metrics: number;
   };
   trend: number;
+}
+
+export interface PeerTrendPoint {
+  monthKey: string;
+  label: string;
+  score: number | null;
+}
+
+export interface PeerTrendSeries {
+  key: "self" | "top" | "above" | "below" | "peer_avg";
+  relation: "self" | "top" | "above" | "below" | "peer_avg";
+  managerId: string | null;
+  name: string;
+  rank: number | null;
+  latestScore: number | null;
+  points: PeerTrendPoint[];
+}
+
+export interface PeerTrendSummary {
+  rank: number;
+  totalPeers: number;
+  topPercentile: number;
+  tier: "Champion" | "Elite" | "Contender" | "Rising";
+  currentScore: number;
+  category: string;
+  scoreGapToTop: number;
+  scoreGapToNext: number;
+  scoreLeadOverBelow: number;
+  nextManagerName: string | null;
+  belowManagerName: string | null;
+  abovePeerAverageStreak: number;
+}
+
+export interface PeerTrendBenchmark {
+  timeframe: {
+    months: number;
+    start: string | null;
+    end: string | null;
+  };
+  summary: PeerTrendSummary | null;
+  series: PeerTrendSeries[];
 }
 
 export async function fetchHRManagers(hrId: string): Promise<HRManager[]> {

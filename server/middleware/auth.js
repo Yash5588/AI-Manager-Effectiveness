@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = "manager-effectiveness-secret-key-2026";
+const JWT_SECRET = process.env.JWT_SECRET || "manager-effectiveness-secret-key-2026";
 
 function generateToken(payload) {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });

@@ -4,60 +4,7 @@ const Feedback = require("../models/Feedback");
 const User = require("../models/User");
 const { authMiddleware, requireRole } = require("../middleware/auth");
 const { analyzeSentiment } = require("../services/aiSuggestionsService");
-
-function computeCompositeFeedbackScore(feedback) {
-  let totalWeight = 0;
-  let weightedSum = 0;
-
-  if (feedback.sentimentScore != null) {
-    weightedSum += feedback.sentimentScore * 0.30;
-    totalWeight += 0.30;
-  }
-
-  if (feedback.ratings) {
-    const ratingValues = Object.values(feedback.ratings).filter(v => v != null && v > 0);
-    if (ratingValues.length > 0) {
-      const avgRating = ratingValues.reduce((s, v) => s + v, 0) / ratingValues.length;
-      weightedSum += (avgRating - 1) / 4 * 0.25;
-      totalWeight += 0.25;
-    }
-  }
-
-  if (feedback.npsScore != null) {
-    weightedSum += (feedback.npsScore / 10) * 0.15;
-    totalWeight += 0.15;
-  }
-
-  if (feedback.pulseMood) {
-    const moodMap = { thriving: 1.0, happy: 0.75, neutral: 0.5, stressed: 0.25, struggling: 0.0 };
-    weightedSum += (moodMap[feedback.pulseMood] ?? 0.5) * 0.10;
-    totalWeight += 0.10;
-  }
-
-  if (feedback.oneOnOneFrequency || feedback.feedbackFrequency || feedback.concernResponseTime) {
-    const freqMap = { weekly: 1.0, biweekly: 0.75, monthly: 0.5, rarely: 0.25, never: 0.0, after_every_task: 1.0, same_day: 1.0, within_week: 0.75, within_month: 0.5 };
-    const freqValues = [
-      feedback.oneOnOneFrequency ? freqMap[feedback.oneOnOneFrequency] : null,
-      feedback.feedbackFrequency ? freqMap[feedback.feedbackFrequency] : null,
-      feedback.concernResponseTime ? freqMap[feedback.concernResponseTime] : null,
-    ].filter(v => v != null);
-
-    if (freqValues.length > 0) {
-      const avgFreq = freqValues.reduce((s, v) => s + v, 0) / freqValues.length;
-      weightedSum += avgFreq * 0.10;
-      totalWeight += 0.10;
-    }
-  }
-
-  if (feedback.peerComparison) {
-    const peerMap = { much_better: 1.0, better: 0.75, same: 0.5, worse: 0.25, much_worse: 0.0 };
-    weightedSum += (peerMap[feedback.peerComparison] ?? 0.5) * 0.10;
-    totalWeight += 0.10;
-  }
-
-  if (totalWeight === 0) return null;
-  return Math.round((weightedSum / totalWeight) * 100) / 100;
-}
+const { computeCompositeFeedbackScore } = require("../services/feedbackScoringService");
 
 // POST /api/feedback/submit — employee submits feedback
 router.post("/submit", authMiddleware, requireRole("employee"), async (req, res) => {
