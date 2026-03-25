@@ -20,6 +20,10 @@ function safeParseJSONArray(text) {
     if (!text) return null;
 
     const cleaned = text
+      // Strip <think>...</think> reasoning blocks (deepseek-r1)
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      // Strip any other XML-like wrapper tags
+      .replace(/<\/?output>/gi, "")
       .replace(/```json/gi, "")
       .replace(/```/g, "")
       .trim();
@@ -27,11 +31,46 @@ function safeParseJSONArray(text) {
     const start = cleaned.indexOf("[");
     const end = cleaned.lastIndexOf("]");
 
-    if (start === -1 || end === -1) return null;
+    if (start === -1) return null;
 
-    const parsed = JSON.parse(cleaned.slice(start, end + 1));
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
+    // If we found both brackets, try normal parse first
+    if (end > start) {
+      try {
+        const parsed = JSON.parse(cleaned.slice(start, end + 1));
+        return Array.isArray(parsed) ? parsed : null;
+      } catch {
+        // Fall through to truncation repair
+      }
+    }
+
+    // Truncation repair: JSON was cut off mid-way due to max_tokens
+    let fragment = cleaned.slice(start);
+
+    // Remove any trailing incomplete key-value pair (e.g., `"metricKey": "tea`)
+    fragment = fragment.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/, "");
+
+    // Close any open structures
+    const openBraces = (fragment.match(/{/g) || []).length;
+    const closeBraces = (fragment.match(/}/g) || []).length;
+    const openBrackets = (fragment.match(/\[/g) || []).length;
+    const closeBrackets = (fragment.match(/]/g) || []).length;
+
+    // Remove trailing comma before we close
+    fragment = fragment.replace(/,\s*$/, "");
+
+    // Close remaining open braces and brackets
+    for (let i = 0; i < openBraces - closeBraces; i++) fragment += "}";
+    for (let i = 0; i < openBrackets - closeBrackets; i++) fragment += "]";
+
+    const repaired = JSON.parse(fragment);
+    if (Array.isArray(repaired) && repaired.length > 0) {
+      console.log(`🔧 Repaired truncated JSON (recovered ${repaired.length} items)`);
+      return repaired;
+    }
+    return null;
+  } catch (err) {
+    console.warn("⚠️ safeParseJSONArray failed:", err.message);
+    console.warn("⚠️ Raw AI text (first 500 chars):", (text || "").slice(0, 500));
     return null;
   }
 }
@@ -54,6 +93,7 @@ async function generateAISuggestions(payload) {
     employees = [],
     feedbacks = [],
     metrics = [],
+    extendedMetrics = {},
     breakdown = {},
     finalScore,
     category,
@@ -104,6 +144,17 @@ async function generateAISuggestions(payload) {
       ? metrics.map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}`).join("\n")
       : "No metrics on record.";
 
+  const extendedSummary = extendedMetrics
+    ? [
+      `- Team Retention: ${extendedMetrics.teamRetentionRate ?? "N/A"}%`,
+      `- Goal Completion: ${extendedMetrics.goalCompletionRate ?? "N/A"}%`,
+      `- Promotion Rate: ${extendedMetrics.employeePromotionRate ?? "N/A"}%`,
+      `- 360 Feedback Rating: ${extendedMetrics.subordinate360Rating ?? "N/A"}/100`,
+      `- Engagement Score: ${extendedMetrics.employeeEngagementScore ?? "N/A"}/100`,
+      `- Development Plans (IDP): ${extendedMetrics.IDP ?? "N/A"} active plans`,
+    ].join("\n")
+    : "No extended metrics on record.";
+
   const prompt = `
 You are an expert management coach.
 
@@ -140,6 +191,9 @@ ${feedbacksSummary}
 
 Metrics:
 ${metricsSummary}
+
+Success Metrics (Extended):
+${extendedSummary}
 `.trim();
 
   const models = [
@@ -158,9 +212,12 @@ ${metricsSummary}
       const completion =
         await openRouterClient.chat.completions.create({
           model,
-          messages: [{ role: "user", content: prompt }],
+          messages: [
+            { role: "system", content: "You are a JSON-only API. Output ONLY a valid JSON array. No markdown, no code fences, no explanations, no reasoning — just the raw JSON array." },
+            { role: "user", content: prompt }
+          ],
           temperature: 0.3,
-          max_tokens: 800,
+          max_tokens: 1200,
         });
 
       const content = completion?.choices?.[0]?.message?.content;
@@ -307,10 +364,12 @@ Team Size: ${coachingProfiles.length} employees
 
 Team Context:
 - Goal Completion: ${teamMetrics.goalCompletionRate ?? 0}%
-- Dev Goals: ${teamMetrics.totalDevGoals ?? 0} total (avg ${teamMetrics.avgDevGoalAssignment ?? 0}/employee)
+- Promotion Rate: ${teamMetrics.promotionRate ?? 0}%
+- Retention Rate: ${teamMetrics.teamRetentionRate ?? 0}%
+- 360 Feedback Rating: ${teamMetrics.subordinate360Rating ?? 0}/100
+- Engagement Score: ${teamMetrics.engagementScore ?? 0}%
+- Development Plans (IDP): ${teamMetrics.totalDevGoals ?? 0} total (avg ${teamMetrics.avgDevGoalAssignment ?? 0}/employee)
 - Dev Goal Status: ${teamMetrics.devGoalStatus ?? "Unknown"}
-- Team Engagement: ${teamMetrics.engagementScore ?? 0}%
-- Team Retention: ${teamMetrics.teamRetentionRate ?? 0}%
 
 Employee Talent Profiles:
 ${employeeDetails}
@@ -331,9 +390,12 @@ ${employeeDetails}
 
       const completion = await openRouterClient.chat.completions.create({
         model,
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          { role: "system", content: "You are a JSON-only API. Output ONLY a valid JSON array. No markdown, no code fences, no explanations, no reasoning — just the raw JSON array." },
+          { role: "user", content: prompt }
+        ],
         temperature: 0.3,
-        max_tokens: 800,
+        max_tokens: 1200,
       });
 
       const content = completion?.choices?.[0]?.message?.content;
@@ -426,7 +488,6 @@ Feedback: "${comment}"
           }
         }
 
-        //safe case if json not parsed
         const numMatch = cleaned.match(/0?\.\d+/);
         if (numMatch) {
           const score = Number(numMatch[0]);
@@ -443,7 +504,6 @@ Feedback: "${comment}"
   return 0.5;
 }
 
-// Generate a structured improvement roadmap for all weak metrics (score < 60)
 async function generateImprovementRoadmap(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing");
@@ -467,28 +527,27 @@ async function generateImprovementRoadmap(payload) {
     throw new Error("Manager data is required for improvement roadmap");
   }
 
-  // Label maps
   const breakdownLabels = {
-    employeePerformance: "Employee Performance",
-    feedbackSentiment: "Feedback Sentiment",
-    kpiMetrics: "KPI Metrics",
+    employeePerformance: "Performance Score",
+    feedbackSentiment: "Sentiment Score",
+    kpiMetrics: "KPI Metrics Score",
     teamRetention: "Team Retention",
     goalCompletion: "Goal Completion",
-    employeePromotion: "Employee Promotion",
-    subordinate360: "360° Subordinate Rating",
-    engagement: "Engagement",
-    idpScore: "IDP (Dev Goals)",
+    employeePromotion: "Promotion Rate",
+    subordinate360: "360 Feedback Rating",
+    engagement: "Engagement Score",
+    idpScore: "Development Plans (IDP)",
   };
 
   const extendedLabels = {
-    teamRetentionRate: "Team Retention Rate",
-    goalCompletionRate: "Goal Completion Rate",
-    employeePromotionRate: "Employee Promotion Rate",
-    subordinate360Rating: "360° Subordinate Rating",
-    employeeEngagementScore: "Employee Engagement Score",
+    teamRetentionRate: "Team Retention",
+    goalCompletionRate: "Goal Completion",
+    employeePromotionRate: "Promotion Rate",
+    subordinate360Rating: "360 Feedback Rating",
+    employeeEngagementScore: "Engagement Score",
+    IDP: "Development Plans (IDP)",
   };
 
-  // Collect weak metrics (< 60)
   const weakMetrics = [];
   for (const [key, value] of Object.entries(breakdown)) {
     if (breakdownLabels[key] && typeof value === "number" && value < 60) {
@@ -505,7 +564,6 @@ async function generateImprovementRoadmap(payload) {
     return { roadmap: [], message: "All metrics are healthy — no weak areas detected!" };
   }
 
-  // Summarize recent feedback for context
   const recentFeedback = feedbacks.slice(0, 15).map((f) => {
     const score = f?.sentimentScore ?? 0;
     const label = score >= 0.6 ? "Positive" : score <= 0.4 ? "Negative" : "Neutral";
@@ -550,8 +608,8 @@ STRICT RULES:
 `.trim();
 
   const models = [
-    "deepseek/deepseek-chat",
     "deepseek/deepseek-r1",
+    "deepseek/deepseek-chat",
     "mistralai/mistral-small-3.1-24b-instruct:free",
     "google/gemma-3-12b-it:free",
     "qwen/qwen3-coder:free",
@@ -564,16 +622,18 @@ STRICT RULES:
 
       const completion = await openRouterClient.chat.completions.create({
         model,
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          { role: "system", content: "You are a JSON-only API. Output ONLY a valid JSON array. No markdown, no code fences, no explanations, no reasoning — just the raw JSON array." },
+          { role: "user", content: prompt }
+        ],
         temperature: 0.3,
-        max_tokens: 800,
+        max_tokens: 2000,
       });
 
       const content = completion?.choices?.[0]?.message?.content;
       const parsed = safeParseJSONArray(content);
 
       if (parsed && parsed.length > 0) {
-        // Validate and enrich each item
         return {
           roadmap: parsed.map((item) => ({
             metricKey: item.metricKey || "unknown",
@@ -598,7 +658,10 @@ STRICT RULES:
       console.warn(`⚠️ Model ${model} returned unparseable roadmap response`);
     } catch (err) {
       console.error(`❌ Roadmap Model ${model} failed:`, err.message);
-      lastError = err?.response?.data?.error?.message || err?.message || String(err);
+      const providerError = err?.response?.data?.error?.message || err?.message || String(err);
+      lastError = providerError === "401 User not found."
+        ? "OpenRouter authentication failed for roadmap generation"
+        : providerError;
     }
   }
 

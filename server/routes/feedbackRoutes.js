@@ -42,7 +42,6 @@ router.post("/submit", authMiddleware, requireRole("employee"), async (req, res)
       return res.status(404).json({ message: "Manager not found" });
     }
 
-    //check for valid next feedback submission
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     const recentFeedback = await Feedback.findOne({
@@ -133,7 +132,6 @@ router.get("/my-feedbacks", authMiddleware, requireRole("employee"), async (req,
       Feedback.countDocuments({ employeeId: req.user.id }),
     ]);
 
-    //attaching manager with his id
     const managerIds = [...new Set(feedbacks.map(f => f.managerId.toString()))];
     const managers = await User.find({ _id: { $in: managerIds } }).lean();
     const managerMap = {};

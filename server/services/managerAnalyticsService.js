@@ -72,7 +72,7 @@ function computeManagerScoreFromInputs({ employees, feedbacks, metrics, extended
     ? metrics.reduce((sum, metric) => sum + normalizeMetricValue(metric.value), 0) / metrics.length
     : 0.5;
 
-  const { finalScore, breakdown: formulaBreakdown } = computeFormulaScore({
+  const { finalScore, breakdown: secondaryMetrics } = computeFormulaScore({
     avgEmployeeScore,
     avgFeedbackScore,
     avgMetricScore,
@@ -80,7 +80,7 @@ function computeManagerScoreFromInputs({ employees, feedbacks, metrics, extended
     employeeCount: employees.length,
   });
 
-  const roundedAverages = {
+  const primaryMetrics = {
     avgEmployeeScore: Math.round(avgEmployeeScore * 100) / 100,
     avgFeedbackScore: Math.round(avgFeedbackScore * 100) / 100,
     avgMetricScore: Math.round(avgMetricScore * 100) / 100,
@@ -90,8 +90,8 @@ function computeManagerScoreFromInputs({ employees, feedbacks, metrics, extended
     avgEmployeeScore,
     avgFeedbackScore,
     avgMetricScore,
-    roundedAverages,
-    formulaBreakdown,
+    primaryMetrics,
+    secondaryMetrics,
     finalScore,
     category: getPerformanceCategory(finalScore),
     counts: {
@@ -110,8 +110,8 @@ async function computeManagerAnalytics(managerId) {
     ...inputs,
     ...score,
     breakdown: {
-      ...score.roundedAverages,
-      ...score.formulaBreakdown,
+      ...score.primaryMetrics,
+      ...score.secondaryMetrics,
     },
     extendedMetrics: inputs.extendedMetrics ? toPlainObject(inputs.extendedMetrics) : {},
   };

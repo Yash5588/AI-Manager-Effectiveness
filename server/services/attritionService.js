@@ -205,6 +205,10 @@ async function predictTeamAttrition(payload) {
         const flightRisk = computeFormulaFlightRisk(emp, empFeedbacks, extendedMetrics);
         const impactScore = computeFormulaImpactScore(emp, empFeedbacks, employees.length);
 
+        const empMetrics = metrics.filter(
+            m => m.employeeId?.toString() === emp._id?.toString()
+        );
+
         return {
             employeeName: emp.name,
             role: emp.role,
@@ -214,6 +218,7 @@ async function predictTeamAttrition(payload) {
             riskLevel: getLevel(flightRisk),
             impactLevel: getLevel(impactScore),
             feedbackCount: empFeedbacks.length,
+            metrics: empMetrics,
         };
     });
 
@@ -230,9 +235,12 @@ Your job is to REFINE these scores (adjust by ±15 points max) based on qualitat
 Manager Context:
 - Name: ${manager.name}
 - Department: ${manager.department}
-- Overall Team Retention Rate: ${extendedMetrics.teamRetentionRate || "N/A"}%
-- Team Engagement Score: ${extendedMetrics.employeeEngagementScore || "N/A"}%
-- Growth Rate: ${extendedMetrics.employeeGrowthRate || "N/A"}%
+- Team Retention: ${extendedMetrics.teamRetentionRate ?? "N/A"}%
+- Goal Completion: ${extendedMetrics.goalCompletionRate ?? "N/A"}%
+- Promotion Rate: ${extendedMetrics.employeePromotionRate ?? "N/A"}%
+- 360 Feedback Rating: ${extendedMetrics.subordinate360Rating ?? "N/A"}/100
+- Engagement Score: ${extendedMetrics.employeeEngagementScore ?? "N/A"}/100
+- Development Plans (IDP): ${extendedMetrics.IDP ?? "N/A"} active plans
 
 Formula-Based Predictions & Employee Data:
 ${formulaPredictions.map(p => {
@@ -248,18 +256,18 @@ ${formulaPredictions.map(p => {
             return line;
         }).join("; ");
 
+        const metricsSummary = p.metrics?.length > 0
+            ? p.metrics.map(m => `- ${m.metricName}: ${m.value}`).join("; ")
+            : "None";
+
         return `- ${p.employeeName} (${p.role}):
       Performance: ${p.performanceRating}/5
       Formula Flight Risk: ${p.flightRisk}% (${p.riskLevel})
       Formula Impact Score: ${p.impactScore}% (${p.impactLevel})
       Feedback: ${feedbackSummary || "None"}
+      Custom Metrics: ${metricsSummary}
     `;
     }).join("\n")}
-
-Additional Manager Metrics:
-- 1-on-1 Frequency: ${extendedMetrics.oneOnOneFrequency || "N/A"}/100
-- Training Investment: ${extendedMetrics.trainingInvestment || "N/A"}/100
-- Response Time: ${extendedMetrics.responseTimeScore || "N/A"}/100
 
 SCORING RULES:
 1. You may adjust the formula Flight Risk and Impact Score by UP TO ±15 points based on qualitative signals in the feedback text.

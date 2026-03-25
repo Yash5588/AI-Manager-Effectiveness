@@ -1,19 +1,16 @@
-/**
- * 9-Dimension Manager Effectiveness Scoring Formula
- *
- * Dimensions and default weights:
- *   1. employeePerformance  - 12%  (avg employee rating, normalized 0-1)
- *   2. feedbackSentiment    - 13%  (avg composite feedback score, 0-1)
- *   3. kpiMetrics           - 12%  (avg KPI metric value / 100, 0-1)
- *   4. teamRetention        - 10%  (teamRetentionRate / 100)
- *   5. goalCompletion       - 10%  (goalCompletionRate / 100)
- *   6. employeePromotion    -  8%  (employeePromotionRate / 100)
- *   7. subordinate360       - 12%  (subordinate360Rating / 100)
- *   8. engagement           - 12%  (employeeEngagementScore / 100)
- *   9. idpScore             -  8%  (min(1, IDP / totalEmployees))
- *
- * Missing dimensions have their weight redistributed proportionally.
- */
+/*
+9-Dimension Manager Effectiveness Scoring Formula
+ Dimensions and default weights:
+  1. employeePerformance  - 12%  (avg employee rating, normalized 0-1)
+  2. feedbackSentiment    - 13%  (avg composite feedback score, 0-1)
+  3. kpiMetrics           - 12%  (avg KPI metric value / 100, 0-1)
+  4. teamRetention        - 10%  (teamRetentionRate / 100)
+  5. goalCompletion       - 10%  (goalCompletionRate / 100)
+  6. employeePromotion    -  8%  (employeePromotionRate / 100)
+  7. subordinate360       - 12%  (subordinate360Rating / 100)
+  8. engagement           - 12%  (employeeEngagementScore / 100)
+  9. idpScore             -  8%  (min(1, IDP / totalEmployees))
+*/
 
 const DIMENSION_WEIGHTS = {
     employeePerformance: 0.12,
@@ -27,17 +24,6 @@ const DIMENSION_WEIGHTS = {
     idpScore: 0.08,
 };
 
-/**
- * Compute the 9-dimension formula score and per-dimension breakdown.
- *
- * @param {Object} data
- * @param {number|null} data.avgEmployeeScore    - 0-1 (normalized employee perf avg)
- * @param {number|null} data.avgFeedbackScore    - 0-1 (avg composite feedback score)
- * @param {number|null} data.avgMetricScore      - 0-1 (avg KPI metric / 100)
- * @param {Object|null} data.extendedMetrics     - ManagerExtendedMetrics doc
- * @param {number}      data.employeeCount       - total employees (for IDP normalization)
- * @returns {{ finalScore: number, breakdown: Object }}
- */
 function computeFormulaScore(data) {
     const {
         avgEmployeeScore,
@@ -49,7 +35,6 @@ function computeFormulaScore(data) {
 
     const ext = extendedMetrics || {};
 
-    // Build normalized values for each dimension (0-1), null if missing
     const dimensionValues = {
         employeePerformance: avgEmployeeScore != null ? avgEmployeeScore : null,
         feedbackSentiment: avgFeedbackScore != null ? avgFeedbackScore : null,
@@ -64,7 +49,6 @@ function computeFormulaScore(data) {
             : null,
     };
 
-    // Calculate total available weight for redistribution
     let totalAvailableWeight = 0;
     for (const [key, val] of Object.entries(dimensionValues)) {
         if (val != null) {
@@ -72,7 +56,6 @@ function computeFormulaScore(data) {
         }
     }
 
-    // If nothing is available, return default 50
     if (totalAvailableWeight === 0) {
         const defaultBreakdown = {};
         for (const key of Object.keys(DIMENSION_WEIGHTS)) {
@@ -81,7 +64,6 @@ function computeFormulaScore(data) {
         return { finalScore: 50, breakdown: defaultBreakdown };
     }
 
-    // Compute weighted score with proportional redistribution
     let weightedSum = 0;
     const breakdown = {};
 
@@ -91,7 +73,7 @@ function computeFormulaScore(data) {
             weightedSum += val * adjustedWeight;
             breakdown[key] = Math.round(val * 100);
         } else {
-            breakdown[key] = 50; // default for missing dimensions
+            breakdown[key] = 50;
         }
     }
 

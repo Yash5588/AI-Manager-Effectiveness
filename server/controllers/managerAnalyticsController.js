@@ -36,20 +36,18 @@ exports.getManagerAnalytics = async (req, res) => {
       metrics,
       extendedMetrics,
       finalScore,
-      formulaBreakdown,
-      roundedAverages,
+      secondaryMetrics,
+      primaryMetrics,
       counts,
       category,
     } = analytics;
 
-    // On-demand insights: regenerate if new feedback exists since last cached insights
     const latestSnapshot = await ScoreSnapshot.findOne({
       managerId,
       aiReasoning: { $exists: true, $ne: null },
     }).sort({ createdAt: -1 });
 
-    // Find the newest feedback timestamp for this manager
-    const newestFeedback = await Feedback.findOne({ managerId: toObjectId(managerId) })
+    const newestFeedback = await Feedback.findOne({ managerId: toObjectId(managerId), ...getFeedbackDateFilter() })
       .sort({ createdAt: -1 })
       .select("createdAt")
       .lean();
@@ -59,7 +57,6 @@ exports.getManagerAnalytics = async (req, res) => {
 
     let aiInsights = {};
     if (hasNewData && feedbacks.length > 0) {
-      // New feedback exists — generate fresh insights
       try {
         const { computeAIInsights } = require("../services/aiScoringService");
         aiInsights = await computeAIInsights({
@@ -68,19 +65,18 @@ exports.getManagerAnalytics = async (req, res) => {
           feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map(toPlainObject),
           metrics: metrics.map(toPlainObject),
           extendedMetrics: extendedMetrics ? toPlainObject(extendedMetrics) : {},
-          breakdown: formulaBreakdown,
+          breakdown: secondaryMetrics,
           formulaScore: finalScore,
         });
 
-        // Cache the fresh insights in a new snapshot
         await ScoreSnapshot.create({
           managerId,
           finalScore,
-          breakdown: roundedAverages,
+          breakdown: primaryMetrics,
           category,
           counts,
           aiScore: finalScore,
-          aiBreakdown: formulaBreakdown,
+          aiBreakdown: secondaryMetrics,
           aiReasoning: aiInsights.aiReasoning || null,
           aiStrengths: aiInsights.aiStrengths || [],
           aiWeaknesses: aiInsights.aiWeaknesses || [],
@@ -88,7 +84,6 @@ exports.getManagerAnalytics = async (req, res) => {
         console.log(`🔄 Fresh insights generated and cached for ${manager.name}`);
       } catch (err) {
         console.error(`⚠️ On-demand insights failed for ${manager.name}:`, err.message);
-        // Fall back to cached insights if available
         if (latestSnapshot) {
           aiInsights = {
             aiReasoning: latestSnapshot.aiReasoning,
@@ -98,7 +93,6 @@ exports.getManagerAnalytics = async (req, res) => {
         }
       }
     } else if (latestSnapshot) {
-      // No new data — serve cached insights
       aiInsights = {
         aiReasoning: latestSnapshot.aiReasoning,
         aiStrengths: latestSnapshot.aiStrengths,
@@ -112,8 +106,8 @@ exports.getManagerAnalytics = async (req, res) => {
         effectivenessScore: finalScore,
       },
       breakdown: {
-        ...roundedAverages,
-        ...formulaBreakdown,
+        ...primaryMetrics,
+        ...secondaryMetrics,
       },
       extendedMetrics: extendedMetrics ? toPlainObject(extendedMetrics) : {},
       finalScore,
@@ -150,7 +144,7 @@ exports.generateSuggestions = async (req, res) => {
       metrics,
       extendedMetrics,
       finalScore,
-      formulaBreakdown,
+      secondaryMetrics,
       category,
       counts,
     } = analytics;
@@ -161,7 +155,7 @@ exports.generateSuggestions = async (req, res) => {
       feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map(toPlainObject),
       metrics: metrics.map(toPlainObject),
       extendedMetrics: extendedMetrics ? toPlainObject(extendedMetrics) : {},
-      breakdown: formulaBreakdown,
+      breakdown: secondaryMetrics,
       finalScore,
       category,
       counts,
@@ -173,7 +167,11 @@ exports.generateSuggestions = async (req, res) => {
     console.error("Suggestions error:", error);
     const msg = error.message || "Failed to generate suggestions";
     const status =
-      msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
+      msg.includes("OPENROUTER_API_KEY") ||
+      msg.includes("API key") ||
+      msg.includes("OpenRouter authentication failed")
+        ? 503
+        : 500;
     res.status(status).json({ message: msg });
   }
 };
@@ -196,7 +194,7 @@ exports.generateEmployeeSuggestionsHandler = async (req, res) => {
 
       if (cached) {
         // Check if new feedback arrived since cache was created
-        const newestFeedback = await Feedback.findOne({ managerId: toObjectId(managerId) })
+        const newestFeedback = await Feedback.findOne({ managerId: toObjectId(managerId), ...getFeedbackDateFilter() })
           .sort({ createdAt: -1 }).select("createdAt").lean();
 
         const cacheIsFresh = !newestFeedback || new Date(newestFeedback.createdAt) <= new Date(cached.createdAt);
@@ -255,7 +253,11 @@ exports.generateEmployeeSuggestionsHandler = async (req, res) => {
     console.error("Employee suggestions error:", error);
     const msg = error.message || "Failed to generate employee suggestions";
     const status =
-      msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
+      msg.includes("OPENROUTER_API_KEY") ||
+      msg.includes("API key") ||
+      msg.includes("OpenRouter authentication failed")
+        ? 503
+        : 500;
     res.status(status).json({ message: msg });
   }
 };
@@ -286,7 +288,11 @@ exports.getAttritionPredictions = async (req, res) => {
     console.error("Attrition prediction error:", error);
     const msg = error.message || "Failed to predict attrition";
     const status =
-      msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
+      msg.includes("OPENROUTER_API_KEY") ||
+      msg.includes("API key") ||
+      msg.includes("OpenRouter authentication failed")
+        ? 503
+        : 500;
     res.status(status).json({ message: msg });
   }
 };
@@ -309,7 +315,7 @@ exports.generateImprovementRoadmapHandler = async (req, res) => {
 
       if (cached) {
         // Check if new feedback arrived since cache was created
-        const newestFeedback = await Feedback.findOne({ managerId: toObjectId(managerId) })
+        const newestFeedback = await Feedback.findOne({ managerId: toObjectId(managerId), ...getFeedbackDateFilter() })
           .sort({ createdAt: -1 }).select("createdAt").lean();
 
         const cacheIsFresh = !newestFeedback || new Date(newestFeedback.createdAt) <= new Date(cached.createdAt);
@@ -323,12 +329,12 @@ exports.generateImprovementRoadmapHandler = async (req, res) => {
 
     // Cache miss or stale — generate fresh roadmap
     const analytics = await computeSharedManagerAnalytics(managerId);
-    const { feedbacks, extendedMetrics, finalScore, formulaBreakdown } = analytics;
+    const { feedbacks, extendedMetrics, finalScore, secondaryMetrics } = analytics;
 
     const payload = {
       manager: toPlainObject(manager),
       feedbacks: feedbacks.slice(0, FEEDBACK_AI_LIMIT).map(toPlainObject),
-      breakdown: formulaBreakdown,
+      breakdown: secondaryMetrics,
       extendedMetrics: extendedMetrics ? toPlainObject(extendedMetrics) : {},
       finalScore,
     };
@@ -348,7 +354,11 @@ exports.generateImprovementRoadmapHandler = async (req, res) => {
     console.error("Improvement roadmap error:", error);
     const msg = error.message || "Failed to generate improvement roadmap";
     const status =
-      msg.includes("OPENROUTER_API_KEY") || msg.includes("API key") ? 503 : 500;
+      msg.includes("OPENROUTER_API_KEY") ||
+      msg.includes("API key") ||
+      msg.includes("OpenRouter authentication failed")
+        ? 503
+        : 500;
     res.status(status).json({ message: msg });
   }
 };
@@ -393,7 +403,6 @@ exports.getManagerLeaderboard = async (req, res) => {
       return res.status(400).json({ message: "Manager has no assigned HR" });
     }
 
-    // Find all peer managers under the same HR
     const peerManagers = await User.find({ hrId: manager.hrId, userType: "manager" }).select("-password");
 
     const leaderboard = await Promise.all(
@@ -445,11 +454,6 @@ exports.getPeerTrendBenchmark = async (req, res) => {
       peerManagers = await User.find({ hrId: manager.hrId, userType: "manager" }).select("-password");
     } else {
       peerManagers = [manager];
-    }
-
-    const hasSelfInPeers = peerManagers.some((mgr) => mgr._id.toString() === managerId);
-    if (!hasSelfInPeers) {
-      peerManagers.push(manager);
     }
 
     const managerScores = await Promise.all(

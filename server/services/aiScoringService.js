@@ -118,12 +118,12 @@ async function computeAIInsights(payload) {
 
     const ext = extendedMetrics || {};
     const extendedSummary = `
-- Team Retention Rate: ${ext.teamRetentionRate ?? "N/A"}/100
-- Goal Completion Rate: ${ext.goalCompletionRate ?? "N/A"}/100
-- Employee Promotion Rate: ${ext.employeePromotionRate ?? "N/A"}/100
-- 360° Subordinate Rating (MSF): ${ext.subordinate360Rating ?? "N/A"}/100
-- Employee Engagement Score (Pulse): ${ext.employeeEngagementScore ?? "N/A"}/100
-- IDP (Employees with Active Dev Goals): ${ext.IDP ?? "N/A"} employees`.trim();
+- Team Retention: ${ext.teamRetentionRate ?? "N/A"}%
+- Goal Completion: ${ext.goalCompletionRate ?? "N/A"}%
+- Promotion Rate: ${ext.employeePromotionRate ?? "N/A"}%
+- 360 Feedback Rating: ${ext.subordinate360Rating ?? "N/A"}/100
+- Engagement Score: ${ext.employeeEngagementScore ?? "N/A"}/100
+- Development Plans (IDP): ${ext.IDP ?? "N/A"} active plans`.trim();
 
     // Format breakdown for LLM context
     const breakdownSummary = Object.entries(breakdown)
