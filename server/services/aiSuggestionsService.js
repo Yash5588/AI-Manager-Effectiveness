@@ -89,9 +89,180 @@ function safeParseJSONArray(text) {
   }
 }
 
+function safeParseJSONObject(text) {
+  try {
+    if (!text) return null;
+
+    const cleaned = text
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/<\/?output>/gi, "")
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+
+    if (start === -1) return null;
+
+    if (end > start) {
+      try {
+        const parsed = JSON.parse(cleaned.slice(start, end + 1));
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+      } catch {
+        // Fall through to truncation repair
+      }
+    }
+
+    let fragment = cleaned.slice(start);
+    fragment = fragment.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/, "");
+    fragment = fragment.replace(/,\s*([}\]])/g, "$1");
+
+    const openBraces = (fragment.match(/{/g) || []).length;
+    const closeBraces = (fragment.match(/}/g) || []).length;
+    const openBrackets = (fragment.match(/\[/g) || []).length;
+    const closeBrackets = (fragment.match(/]/g) || []).length;
+
+    for (let i = 0; i < openBraces - closeBraces; i++) fragment += "}";
+    for (let i = 0; i < openBrackets - closeBrackets; i++) fragment += "]";
+
+    const repaired = JSON.parse(fragment);
+    return repaired && typeof repaired === "object" && !Array.isArray(repaired) ? repaired : null;
+  } catch (err) {
+    console.warn("⚠️ safeParseJSONObject failed:", err.message);
+    console.warn("⚠️ Raw AI text (first 500 chars):", (text || "").slice(0, 500));
+    return null;
+  }
+}
+
+function truncateText(value = "", maxLength = 120) {
+  const compact = String(value || "").replace(/\s+/g, " ").trim();
+  if (!compact) return "";
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+}
+
+function formatMetricNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.round(numeric * 10) / 10 : null;
+}
+
+function buildFallbackAISuggestions(payload = {}, reason = "") {
+  const finalScore = Number(payload.finalScore) || 0;
+  const breakdown = payload.breakdown || {};
+  const extendedMetrics = payload.extendedMetrics || {};
+  const feedbackScore = Math.round((breakdown.avgFeedbackScore ?? 0.5) * 100);
+  const employeeScore = Math.round((breakdown.avgEmployeeScore ?? 0.5) * 100);
+  const metricsScore = Math.round((breakdown.avgMetricScore ?? 0.5) * 100);
+  const basePredictedScore = Math.min(100, Math.max(finalScore + 4, finalScore + 1));
+
+  const candidates = [
+    {
+      category: "communication",
+      title: "Close feedback loops faster",
+      description: `Review recent feedback themes and respond with one clear action for the team this week${reason ? " while AI recommendations are temporarily unavailable" : ""}.`,
+      priority: feedbackScore < 65 ? "high" : "medium",
+      predictedScore: basePredictedScore,
+    },
+    {
+      category: "growth",
+      title: "Strengthen development planning",
+      description: `Create or refresh IDP goals for team members, prioritizing employees without active development momentum.`,
+      priority: (extendedMetrics.IDP ?? 0) < 3 ? "high" : "medium",
+      predictedScore: Math.min(100, basePredictedScore + 2),
+    },
+    {
+      category: "leadership",
+      title: "Tighten goal execution rhythm",
+      description: `Use a weekly check-in to review blockers, goal progress, and ownership so execution signals improve before the next score refresh.`,
+      priority: metricsScore < 70 ? "high" : "medium",
+      predictedScore: Math.min(100, basePredictedScore + 3),
+    },
+    {
+      category: "culture",
+      title: "Increase recognition moments",
+      description: `Recognize concrete wins in team channels and 1:1s to improve engagement and sentiment signals.`,
+      priority: employeeScore < 70 ? "medium" : "low",
+      predictedScore: Math.min(100, basePredictedScore + 4),
+    },
+  ];
+
+  return candidates;
+}
+
+function buildFallbackPeerComparison(payload = {}, reason = "") {
+  const current = payload.currentManager || {};
+  const peer = payload.peerManager || {};
+  const currentScore = Number(current.finalScore) || 0;
+  const peerScore = Number(peer.finalScore) || currentScore;
+  const gap = Math.max(0, Math.round((peerScore - currentScore) * 10) / 10);
+  const currentExt = current.extendedMetrics || {};
+  const peerExt = peer.extendedMetrics || {};
+
+  const metricRows = [
+    {
+      key: "goalCompletionRate",
+      label: "Goal Execution",
+      action: "Run a weekly goal review with owners, blockers, and next milestones.",
+    },
+    {
+      key: "employeeEngagementScore",
+      label: "Engagement",
+      action: "Add a recurring recognition and listening ritual to surface team concerns earlier.",
+    },
+    {
+      key: "teamRetentionRate",
+      label: "Retention",
+      action: "Use 1:1s to identify flight-risk signals and agree on retention actions.",
+    },
+    {
+      key: "subordinate360Rating",
+      label: "Manager Feedback",
+      action: "Ask for targeted feedback on communication, availability, and decision clarity.",
+    },
+    {
+      key: "IDP",
+      label: "Development Planning",
+      action: "Refresh IDPs with measurable next steps and dates for each direct report.",
+    },
+  ];
+
+  const peerAdvantages = metricRows
+    .map((row) => {
+      const currentValue = Number(currentExt[row.key] ?? current.breakdown?.[row.key] ?? 0);
+      const peerValue = Number(peerExt[row.key] ?? peer.breakdown?.[row.key] ?? 0);
+      return {
+        ...row,
+        delta: peerValue - currentValue,
+      };
+    })
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 3)
+    .map((row) => ({
+      area: row.label,
+      peerStrength: `The benchmark peer shows stronger signals in ${row.label.toLowerCase()} based on the available manager metrics.`,
+      yourGap: `This is an opportunity area for your team compared with the peer benchmark.`,
+      actionItem: row.action,
+      impact: row.delta > 10 ? "high" : row.delta > 3 ? "medium" : "low",
+    }));
+
+  return {
+    peerAdvantages,
+    scoreSummary: {
+      yourScore: currentScore,
+      peerScore,
+      gap,
+      topDifferentiators: peerAdvantages.map((item) => item.area),
+    },
+    overallInsight: reason
+      ? "AI peer comparison is temporarily unavailable, so this fallback uses formula-based manager metrics to highlight the most likely improvement areas."
+      : "This comparison uses available manager metrics to highlight the most likely improvement areas.",
+  };
+}
+
 async function generateAISuggestions(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is missing");
+    return buildFallbackAISuggestions(payload, "OPENROUTER_API_KEY is missing");
   }
 
   const now = Date.now();
@@ -120,13 +291,20 @@ async function generateAISuggestions(payload) {
   const employeePct = Math.round((breakdown.avgEmployeeScore ?? 0.5) * 100);
   const feedbackPct = Math.round((breakdown.avgFeedbackScore ?? 0.5) * 100);
   const metricsPct = Math.round((breakdown.avgMetricScore ?? 0.5) * 100);
+  const fallbackSuggestions = buildFallbackAISuggestions(payload);
 
   const employeesSummary =
     employees.length > 0
       ? employees
+        .slice(0, 4)
         .map(
           (e) =>
             `- ${e?.name ?? "N/A"} (${e?.role ?? "N/A"}): rating ${e?.performanceRating ?? "?"}/5`
+        )
+        .concat(
+          employees.length > 4
+            ? [`- Additional employees omitted for brevity: ${employees.length - 4}`]
+            : []
         )
         .join("\n")
       : "No employees on record.";
@@ -134,20 +312,14 @@ async function generateAISuggestions(payload) {
   const feedbacksSummary =
     feedbacks.length > 0
       ? feedbacks
+        .slice(0, 3)
         .map((f) => {
-          let line = `- "Anonymous Feedback": "${f?.comment ?? ""}" (sentiment: ${Math.round(
+          let line = `- "${truncateText(f?.comment, 90)}" (sentiment: ${Math.round(
             (f?.sentimentScore ?? 0) * 100
           )}%, composite: ${Math.round((f?.compositeFeedbackScore ?? f?.sentimentScore ?? 0) * 100)}%)`;
-          if (f?.ratings) {
-            const rKeys = Object.entries(f.ratings).filter(([, v]) => v != null);
-            if (rKeys.length > 0) {
-              line += ` [Ratings: ${rKeys.map(([k, v]) => `${k}=${v}/5`).join(", ")}]`;
-            }
-          }
           if (f?.npsScore != null) line += ` [NPS: ${f.npsScore}/10]`;
           if (f?.pulseMood) line += ` [Mood: ${f.pulseMood}]`;
           if (f?.feedbackCategory) line += ` [Category: ${f.feedbackCategory}]`;
-          if (f?.feedbackType) line += ` [Type: ${f.feedbackType}]`;
           return line;
         })
         .join("\n")
@@ -155,7 +327,10 @@ async function generateAISuggestions(payload) {
 
   const metricsSummary =
     metrics.length > 0
-      ? metrics.map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}`).join("\n")
+      ? metrics
+        .slice(0, 4)
+        .map((m) => `- ${m?.metricName ?? "N/A"}: ${m?.value ?? "?"}`)
+        .join("\n")
       : "No metrics on record.";
 
   const extendedSummary = extendedMetrics
@@ -170,43 +345,40 @@ async function generateAISuggestions(payload) {
     : "No extended metrics on record.";
 
   const prompt = `
-You are an expert management coach.
+You are a management coach.
 
-Analyze the manager data below and generate 4–6 actionable improvement suggestions.
+Return ONLY a valid JSON array with exactly 3 objects:
+[
+  {
+    "category": "communication" | "leadership" | "delegation" | "growth" | "culture",
+    "title": "short title",
+    "description": "short action with reason",
+    "priority": "high" | "medium" | "low",
+    "predictedScore": <integer greater than ${finalScore ?? 0}>
+  }
+]
 
-STRICT RULES:
-- Output ONLY a valid JSON array of objects.
-- Each object must have the following fields:
-  - "category": one of ["communication", "leadership", "delegation", "growth", "culture"]
-  - "title": string (short title)
-  - "description": string (1-2 sentences)
-  - "priority": one of ["high", "medium", "low"]
-  - "predictedScore": number (This is the NEW overall effectiveness score out of 100 AFTER implementing the suggestion. The current score is ${finalScore ?? 0}. The predictedScore MUST BE strictly GREATER THAN ${finalScore ?? 0}. For example, if the current score is 72, the predictedScore should be between 73 and 100.)
-- Each suggestion MUST show improvement.
-- No markdown
-- No explanations
+Rules:
+- Use only the data below.
+- Keep title under 6 words.
+- Keep description under 18 words.
+- Keep predictedScore within 1-6 points above ${finalScore ?? 0}.
+- No markdown. No extra text.
 
-Manager: ${manager?.name ?? "Unknown"}
-Department: ${manager?.department ?? "Unknown"}
-Experience: ${manager?.experienceYears ?? 0} years
-
+Manager: ${manager?.name ?? "Unknown"} | ${manager?.department ?? "Unknown"} | ${manager?.experienceYears ?? 0} years
 Overall Score: ${finalScore ?? 0}/100 (${category ?? "Unknown"})
+Core Signals: employee ${employeePct}, feedback ${feedbackPct}, metrics ${metricsPct}
 
-Breakdown:
-- Employee Performance: ${employeePct}
-- Feedback Sentiment: ${feedbackPct}
-- Metrics Score: ${metricsPct}
-
-Employees:
+Team Sample:
 ${employeesSummary}
 
-Feedback:
+Recent Feedback Themes:
 ${feedbacksSummary}
 
-Metrics:
+Key Metrics:
 ${metricsSummary}
 
-Success Metrics (Extended):
+Extended Metrics:
 ${extendedSummary}
 `.trim();
 
@@ -215,7 +387,6 @@ ${extendedSummary}
     "google/gemma-3-4b-it:free",
     "qwen/qwen3-coder:free",
     "deepseek/deepseek-chat",
-    "deepseek/deepseek-r1",
   ];
 
   let lastError = null;
@@ -228,27 +399,37 @@ ${extendedSummary}
         await openRouterClient.chat.completions.create({
           model,
           messages: buildMessages(model, prompt),
-          temperature: 0.3,
-          max_tokens: isFree ? 1200 : 600,
+          temperature: 0.2,
+          max_tokens: isFree ? 220 : 96,
         });
 
       const content = completion?.choices?.[0]?.message?.content;
       const parsed = safeParseJSONArray(content);
 
-      if (parsed) {
-        return parsed.map((s) => {
+      if (parsed && parsed.length > 0) {
+        const normalizedSuggestions = parsed.slice(0, 3).map((s, index) => {
+          const fallback = fallbackSuggestions[index] || fallbackSuggestions[0];
           const current = finalScore ?? 0;
           let predicted = Number(s.predictedScore);
 
           if (isNaN(predicted) || predicted <= current) {
-            predicted = Math.min(100, current + Math.floor(Math.random() * 8) + 4);
+            predicted = Math.min(100, Number(fallback?.predictedScore) || current + 2);
           }
 
           return {
-            ...s,
+            category: s?.category || fallback?.category || "leadership",
+            title: truncateText(s?.title || fallback?.title || "Improve team rhythm", 48),
+            description: truncateText(s?.description || fallback?.description || "Focus on one clear improvement area this cycle.", 140),
+            priority: ["high", "medium", "low"].includes(s?.priority) ? s.priority : (fallback?.priority || "medium"),
             predictedScore: predicted,
           };
         });
+
+        while (normalizedSuggestions.length < 3 && fallbackSuggestions[normalizedSuggestions.length]) {
+          normalizedSuggestions.push(fallbackSuggestions[normalizedSuggestions.length]);
+        }
+
+        return normalizedSuggestions;
       }
     } catch (err) {
       console.error(`❌ Model ${model} failed:`, err.message);
@@ -272,7 +453,8 @@ ${extendedSummary}
   const msg = lastError
     ? `AI failed: ${lastError}`
     : "AI failed on all models";
-  throw new Error(msg);
+  console.warn(`⚠️ ${msg}. Returning fallback suggestions.`);
+  return buildFallbackAISuggestions(payload, msg);
 }
 
 async function generateEmployeeSuggestions(payload) {
@@ -685,7 +867,7 @@ STRICT RULES:
 // ────────────── Peer Comparison Analysis ──────────────
 async function generatePeerComparison(payload) {
   if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is missing");
+    return buildFallbackPeerComparison(payload, "OPENROUTER_API_KEY is missing");
   }
 
   const now = Date.now();
@@ -695,91 +877,72 @@ async function generatePeerComparison(payload) {
   lastCallTime = Date.now();
 
   const { currentManager, peerManager } = payload;
-
-  const formatBreakdown = (b) =>
-    Object.entries(b || {})
-      .filter(([, v]) => typeof v === "number")
-      .map(([k, v]) => `  - ${k}: ${v}`)
-      .join("\n") || "  No breakdown available";
-
-  const formatExtended = (ext) => {
-    if (!ext) return "  No extended metrics";
-    return [
-      `  - Team Retention: ${ext.teamRetentionRate ?? "N/A"}%`,
-      `  - Goal Completion: ${ext.goalCompletionRate ?? "N/A"}%`,
-      `  - Promotion Rate: ${ext.employeePromotionRate ?? "N/A"}%`,
-      `  - 360 Feedback Rating: ${ext.subordinate360Rating ?? "N/A"}/100`,
-      `  - Engagement Score: ${ext.employeeEngagementScore ?? "N/A"}/100`,
-      `  - Development Plans (IDP): ${ext.IDP ?? "N/A"} active plans`,
-    ].join("\n");
-  };
+  const fallbackComparison = buildFallbackPeerComparison(payload);
+  const peerMetricRows = [
+    { key: "goalCompletionRate", label: "Goal Execution" },
+    { key: "employeeEngagementScore", label: "Engagement" },
+    { key: "teamRetentionRate", label: "Retention" },
+    { key: "subordinate360Rating", label: "Manager Feedback" },
+    { key: "IDP", label: "Development Planning" },
+  ];
+  const metricGapSummary = peerMetricRows
+    .map((row) => {
+      const yourValue = formatMetricNumber(currentManager?.extendedMetrics?.[row.key] ?? currentManager?.breakdown?.[row.key]);
+      const peerValue = formatMetricNumber(peerManager?.extendedMetrics?.[row.key] ?? peerManager?.breakdown?.[row.key]);
+      if (yourValue == null || peerValue == null) return null;
+      return {
+        label: row.label,
+        yourValue,
+        peerValue,
+        delta: Math.round((peerValue - yourValue) * 10) / 10,
+      };
+    })
+    .filter((row) => row && row.delta > 0)
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 4);
+  const metricGapText = metricGapSummary.length > 0
+    ? metricGapSummary
+      .map((row) => `- ${row.label}: you ${row.yourValue}, peer ${row.peerValue}, gap ${row.delta}`)
+      .join("\n")
+    : "- No reliable positive metric gaps found";
+  const scoreGap = Math.max(0, Math.round(((peerManager?.finalScore ?? 0) - (currentManager?.finalScore ?? 0)) * 10) / 10);
 
   const prompt = `
-You are an expert HR analytics coach doing a peer comparison analysis.
+You are an HR analytics coach.
 
-Compare two managers — "You" (the current manager) vs a higher-ranked "Peer" — and identify what the peer does BETTER across lead metrics.
-
-Focus on actionable lead indicators such as:
-- Frequency and quality of 1:1 meetings
-- Goal setting timeliness and completion
-- Recognition and appreciation given to team
-- Employee development investment (IDPs)
-- Feedback responsiveness
-- Team engagement practices
-- Retention-building behaviors
-
-Return ONLY a valid JSON object (not an array) with this structure:
+Return ONLY a valid JSON object:
 {
   "peerAdvantages": [
     {
-      "area": "<area name like 'Goal Setting' or 'Recognition'>",
-      "peerStrength": "<what the peer does better, 1-2 sentences>",
-      "yourGap": "<where you fall short, 1-2 sentences>",
-      "actionItem": "<specific action the current manager should take>",
+      "area": "<metric label from the list below>",
+      "peerStrength": "<short phrase>",
+      "yourGap": "<short phrase>",
+      "actionItem": "<short action>",
       "impact": "high" | "medium" | "low"
     }
   ],
   "scoreSummary": {
-    "yourScore": <number>,
-    "peerScore": <number>,
-    "gap": <number>,
-    "topDifferentiators": ["<metric1>", "<metric2>", "<metric3>"]
+    "yourScore": ${currentManager?.finalScore ?? 0},
+    "peerScore": ${peerManager?.finalScore ?? 0},
+    "gap": ${scoreGap},
+    "topDifferentiators": ["<metric1>", "<metric2>"]
   },
-  "overallInsight": "<2-3 sentence summary of what the peer is doing differently>"
+  "overallInsight": "<one short sentence>"
 }
 
-STRICT RULES:
-- Output ONLY the JSON object. No markdown, no explanation.
-- Include 3-5 peer advantages.
-- Be specific and data-driven based on the metrics provided.
+Rules:
+- Exactly 2 peerAdvantages.
+- Use only the metric gaps below.
+- "area" must match a metric label below.
+- Keep peerStrength, yourGap, and actionItem under 12 words each.
+- Keep overallInsight under 20 words.
+- No markdown. No extra text.
 
-── YOUR DATA (Current Manager) ──
-Name: ${currentManager.name}
-Department: ${currentManager.department}
-Experience: ${currentManager.experienceYears} years
-Overall Score: ${currentManager.finalScore}/100 (${currentManager.category})
-Team Size: ${currentManager.counts?.employees ?? 0}
-Feedbacks: ${currentManager.counts?.feedbacks ?? 0}
+Current Manager: ${currentManager?.department ?? "Unknown"} | ${currentManager?.experienceYears ?? 0} years | score ${currentManager?.finalScore ?? 0}
+Higher-Ranked Peer: ${peerManager?.department ?? "Unknown"} | ${peerManager?.experienceYears ?? 0} years | score ${peerManager?.finalScore ?? 0}
 
-Breakdown:
-${formatBreakdown(currentManager.breakdown)}
-
-Extended Metrics:
-${formatExtended(currentManager.extendedMetrics)}
-
-── PEER DATA (Higher Ranked) ──
-Name: Peer Manager (anonymized)
-Department: ${peerManager.department}
-Experience: ${peerManager.experienceYears} years
-Overall Score: ${peerManager.finalScore}/100 (${peerManager.category})
-Team Size: ${peerManager.counts?.employees ?? 0}
-Feedbacks: ${peerManager.counts?.feedbacks ?? 0}
-
-Breakdown:
-${formatBreakdown(peerManager.breakdown)}
-
-Extended Metrics:
-${formatExtended(peerManager.extendedMetrics)}
+Largest Metric Gaps:
+${metricGapText}
 `.trim();
 
   const models = [
@@ -787,7 +950,6 @@ ${formatExtended(peerManager.extendedMetrics)}
     "google/gemma-3-4b-it:free",
     "qwen/qwen3-coder:free",
     "deepseek/deepseek-chat",
-    "deepseek/deepseek-r1",
   ];
 
   let lastError = null;
@@ -805,26 +967,44 @@ ${formatExtended(peerManager.extendedMetrics)}
       const completion = await openRouterClient.chat.completions.create({
         model,
         messages,
-        temperature: 0.3,
-        max_tokens: isFree ? 1500 : 800,
+        temperature: 0.2,
+        max_tokens: isFree ? 180 : 96,
       });
 
       const content = completion?.choices?.[0]?.message?.content;
-      if (content) {
-        const cleaned = content
-          .replace(/<think>[\s\S]*?<\/think>/gi, "")
-          .replace(/```json/gi, "")
-          .replace(/```/g, "")
-          .trim();
+      const parsed = safeParseJSONObject(content);
+      if (parsed && Array.isArray(parsed.peerAdvantages) && parsed.peerAdvantages.length > 0) {
+        const yourScore = Number(parsed?.scoreSummary?.yourScore);
+        const peerScore = Number(parsed?.scoreSummary?.peerScore);
+        const gap = Number(parsed?.scoreSummary?.gap);
+        const peerAdvantages = parsed.peerAdvantages.slice(0, 2).map((item, index) => {
+          const fallback = fallbackComparison.peerAdvantages[index] || fallbackComparison.peerAdvantages[0];
+          return {
+            area: item?.area || fallback?.area || "Improvement Area",
+            peerStrength: truncateText(item?.peerStrength || fallback?.peerStrength || "Peer shows stronger operating signals.", 80),
+            yourGap: truncateText(item?.yourGap || fallback?.yourGap || "This area trails the benchmark.", 80),
+            actionItem: truncateText(item?.actionItem || fallback?.actionItem || "Run a focused improvement cadence.", 90),
+            impact: ["high", "medium", "low"].includes(item?.impact) ? item.impact : (fallback?.impact || "medium"),
+          };
+        });
 
-        const jsonStart = cleaned.indexOf("{");
-        const jsonEnd = cleaned.lastIndexOf("}");
-        if (jsonStart !== -1 && jsonEnd > jsonStart) {
-          const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
-          if (parsed && parsed.peerAdvantages) {
-            return parsed;
-          }
+        while (peerAdvantages.length < 2 && fallbackComparison.peerAdvantages[peerAdvantages.length]) {
+          peerAdvantages.push(fallbackComparison.peerAdvantages[peerAdvantages.length]);
         }
+
+        return {
+          peerAdvantages,
+          scoreSummary: {
+            yourScore: Number.isFinite(yourScore) ? yourScore : fallbackComparison.scoreSummary.yourScore,
+            peerScore: Number.isFinite(peerScore) ? peerScore : fallbackComparison.scoreSummary.peerScore,
+            gap: Number.isFinite(gap) ? gap : fallbackComparison.scoreSummary.gap,
+            topDifferentiators:
+              Array.isArray(parsed?.scoreSummary?.topDifferentiators) && parsed.scoreSummary.topDifferentiators.length > 0
+                ? parsed.scoreSummary.topDifferentiators.slice(0, 3)
+                : fallbackComparison.scoreSummary.topDifferentiators,
+          },
+          overallInsight: truncateText(parsed?.overallInsight || fallbackComparison.overallInsight, 140),
+        };
       }
     } catch (err) {
       console.error(`❌ Peer Comparison Model ${model} failed:`, err.message);
@@ -833,7 +1013,8 @@ ${formatExtended(peerManager.extendedMetrics)}
   }
 
   const msg = lastError ? `AI peer comparison failed: ${lastError}` : "AI peer comparison failed on all models";
-  throw new Error(msg);
+  console.warn(`⚠️ ${msg}. Returning fallback peer comparison.`);
+  return buildFallbackPeerComparison(payload, msg);
 }
 
 // ────────────── Teams Transcript Sentiment Analysis ──────────────
